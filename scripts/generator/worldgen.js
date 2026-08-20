@@ -1,0 +1,83 @@
+/**
+ * World generation orchestrator. Fully deterministic from params.seed:
+ * the same params always regenerate the same world, so scenes only need to
+ * store the params in flags, never the raw arrays.
+ */
+
+import { makeRng } from "../lib/random.js";
+import { WorldGrid } from "./grid.js";
+import { buildHeightmap, seaLevelFor } from "./heightmap.js";
+import { computeTemperature, computeMoisture } from "./climate.js";
+import { computeHydrology, computeFlux, markRivers } from "./hydrology.js";
+import { assignBiomes, B } from "./biomes.js";
+
+export const MAX_CELLS = 25000;
+
+/**
+ * @param {object} params
+ * @param {string} params.seed
+ * @param {string} params.template     continents|pangea|archipelago|islands
+ * @param {number} params.gridType     CONST.GRID_TYPES value
+ * @param {number} params.cols
+ * @param {number} params.rows
+ * @param {number} params.cellSize     pixels per grid space
+ * @param {number} params.waterFraction 0..1
+ * @param {string} params.climate      temperate|cold|tropical|planet
+ * @param {number} params.moisture     multiplier ~0.5..1.5
+ * @param {number} params.riverDensity 0..1
+ */
+export function generateWorld(params) {
+  const n = params.cols * params.rows;
+  if (n > MAX_CELLS) {
+    throw new Error(`HexWorld: too many cells (${n} > ${MAX_CELLS})`);
+  }
+
+  const grid = new WorldGrid({
+    type: params.gridType,
+    size: params.cellSize,
+    cols: params.cols,
+    rows: params.rows
+  });
+
+  // Independent RNG streams per stage so tweaking one slider (e.g. moisture)
+  // never reshuffles unrelated stages of the same seed.
+  const rngElev = makeRng(params.seed + ":elev");
+  const rngMoist = makeRng(params.seed + ":moist");
+
+  const elev = buildHeightmap(grid, rngElev, params.template);
+  const sea = seaLevelFor(elev, params.waterFraction);
+
+  const { isOcean, isLake, isWater, filled } = computeHydrology(grid, elev, sea);
+  const temp = computeTemperature(grid, elev, sea, params.climate);
+  const moist = computeMoisture(grid, rngMoist, isWater, params.moisture);
+  const { flowTo, flux } = computeFlux(grid, filled, isOcean, isLake, moist);
+  const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity);
+
+  const world = {
+    params, grid, elev, sea, filled,
+    isOcean, isLake, isWater,
+    temp, moist, flowTo, flux, isRiver,
+    riverThreshold: threshold
+  };
+  world.biome = assignBiomes(world);
+  world.stats = computeStats(world);
+  return world;
+}
+
+function computeStats(world) {
+  const { grid, isWater, isLake, isRiver } = world;
+  let land = 0, lakes = 0, rivers = 0;
+  for (let c = 0; c < grid.n; c++) {
+    if (!isWater[c]) land++;
+    if (isLake[c]) lakes++;
+    if (isRiver[c]) rivers++;
+  }
+  return {
+    cells: grid.n,
+    landPct: Math.round((land / grid.n) * 100),
+    riverCells: rivers,
+    lakeCells: lakes
+  };
+}
+
+export { B };

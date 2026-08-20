@@ -1,0 +1,33 @@
+{
+  "id": "hexworld",
+  "title": "HexWorld – Generador de Mundos",
+  "description": "Generador procedural de mundos de fantasía integrado en Foundry VTT: alturas, climas, biomas, ríos, mares y montañas, con creación directa de escenas en rejilla hexagonal o cuadrada.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14"
+  },
+  "authors": [
+    {
+      "name": "Manuel Fernández Ventura"
+    }
+  ],
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/hexworld.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    },
+    {
+      "lang": "es",
+      "name": "Español",
+      "path": "lang/es.json"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "hexworld",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Procedural fantasy world generator module for Foundry VTT"
+}

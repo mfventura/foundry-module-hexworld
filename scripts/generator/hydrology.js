@@ -1,0 +1,150 @@
+/**
+ * Hydrology:
+ *  - Ocean detection: flood fill from border water cells (enclosed water = lakes).
+ *  - Depression filling: priority-flood so every land cell has a strictly
+ *    descending path to the ocean/border; deep filled pits become lakes.
+ *  - Flow accumulation: rainfall (from moisture) routed downhill over the
+ *    filled surface; high-flux cells are rivers. Because flux is monotonic
+ *    downstream, thresholding produces connected river networks that pass
+ *    through lakes and end at the sea.
+ */
+
+const EPS = 1e-5;
+
+class MinHeap {
+  constructor(keys) { this.keys = keys; this.heap = []; }
+  get size() { return this.heap.length; }
+  push(idx) {
+    const h = this.heap, k = this.keys;
+    h.push(idx);
+    let c = h.length - 1;
+    while (c > 0) {
+      const p = (c - 1) >> 1;
+      if (k[h[p]] <= k[h[c]]) break;
+      const t = h[p]; h[p] = h[c]; h[c] = t;
+      c = p;
+    }
+  }
+  pop() {
+    const h = this.heap, k = this.keys;
+    const top = h[0];
+    const last = h.pop();
+    if (h.length) {
+      h[0] = last;
+      let c = 0;
+      for (;;) {
+        const l = c * 2 + 1, r = l + 1;
+        let m = c;
+        if (l < h.length && k[h[l]] < k[h[m]]) m = l;
+        if (r < h.length && k[h[r]] < k[h[m]]) m = r;
+        if (m === c) break;
+        const t = h[m]; h[m] = h[c]; h[c] = t;
+        c = m;
+      }
+    }
+    return top;
+  }
+}
+
+/**
+ * @returns {{isOcean: Uint8Array, isLake: Uint8Array, isWater: Uint8Array,
+ *            filled: Float32Array, flowTo: Int32Array, flux: Float32Array}}
+ */
+export function computeHydrology(grid, elev, sea) {
+  const n = grid.n;
+  const isOcean = new Uint8Array(n);
+  const isLake = new Uint8Array(n);
+
+  // --- Ocean: flood fill from border cells below sea level ---
+  const stack = [];
+  for (let c = 0; c < n; c++) {
+    if (grid.isBorder(c) && elev[c] < sea) { isOcean[c] = 1; stack.push(c); }
+  }
+  while (stack.length) {
+    const c = stack.pop();
+    for (const nb of grid.neighbors[c]) {
+      if (!isOcean[nb] && elev[nb] < sea) { isOcean[nb] = 1; stack.push(nb); }
+    }
+  }
+
+  // --- Priority-flood depression filling, seeded from the map border ---
+  const filled = Float32Array.from(elev);
+  const visited = new Uint8Array(n);
+  const heap = new MinHeap(filled);
+  for (let c = 0; c < n; c++) {
+    if (grid.isBorder(c)) { visited[c] = 1; heap.push(c); }
+  }
+  while (heap.size) {
+    const c = heap.pop();
+    for (const nb of grid.neighbors[c]) {
+      if (visited[nb]) continue;
+      visited[nb] = 1;
+      const floor = isOcean[nb] ? filled[c] : filled[c] + EPS;
+      if (filled[nb] < floor) filled[nb] = floor;
+      heap.push(nb);
+    }
+  }
+
+  // --- Lakes: enclosed below-sea water, or land pits filled noticeably above terrain ---
+  for (let c = 0; c < n; c++) {
+    if (isOcean[c]) continue;
+    if (elev[c] < sea || filled[c] - elev[c] > 0.012) isLake[c] = 1;
+  }
+
+  const isWater = new Uint8Array(n);
+  for (let c = 0; c < n; c++) isWater[c] = (isOcean[c] || isLake[c]) ? 1 : 0;
+
+  return { isOcean, isLake, isWater, filled };
+}
+
+/**
+ * Route rainfall downhill over the filled surface and accumulate flux.
+ * Lakes participate so rivers continue from inlets to outlets.
+ * @returns {{flowTo: Int32Array, flux: Float32Array}}
+ */
+export function computeFlux(grid, filled, isOcean, isLake, moist) {
+  const n = grid.n;
+  const flowTo = new Int32Array(n).fill(-1);
+  const flux = new Float32Array(n);
+
+  const order = [];
+  for (let c = 0; c < n; c++) {
+    if (!isOcean[c]) {
+      order.push(c);
+      flux[c] = isLake[c] ? 0.02 : 0.05 + moist[c];
+    }
+  }
+  order.sort((a, b) => filled[b] - filled[a]);
+
+  for (const c of order) {
+    let best = -1, bestF = filled[c];
+    for (const nb of grid.neighbors[c]) {
+      if (filled[nb] < bestF) { bestF = filled[nb]; best = nb; }
+    }
+    if (best === -1) continue; // border drain or perfectly flat: water leaves the map
+    flowTo[c] = best;
+    flux[best] += flux[c];
+  }
+  return { flowTo, flux };
+}
+
+/**
+ * Mark river cells: land cells whose flux exceeds a quantile-based threshold.
+ * @param {number} density 0..1 slider — fraction of land that carries a river
+ * @returns {{isRiver: Uint8Array, threshold: number}}
+ */
+export function markRivers(grid, flux, isWater, density) {
+  const landFlux = [];
+  for (let c = 0; c < grid.n; c++) if (!isWater[c]) landFlux.push(flux[c]);
+  if (!landFlux.length) return { isRiver: new Uint8Array(grid.n), threshold: Infinity };
+  landFlux.sort((a, b) => a - b);
+  const frac = 0.005 + 0.035 * density; // 0.5%..4% of land cells are river
+  const k = Math.max(0, Math.min(landFlux.length - 1, Math.floor((1 - frac) * landFlux.length)));
+  const threshold = landFlux[k];
+
+  const isRiver = new Uint8Array(grid.n);
+  for (let c = 0; c < grid.n; c++) {
+    if (!isWater[c] && flux[c] >= threshold) isRiver[c] = 1;
+  }
+  return { isRiver, threshold };
+}

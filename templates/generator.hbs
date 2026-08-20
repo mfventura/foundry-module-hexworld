@@ -1,0 +1,105 @@
+<div class="hw-layout">
+  <section class="hw-controls">
+    <form class="hw-form">
+      <fieldset>
+        <legend>{{localize "HEXWORLD.World"}}</legend>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.SceneName"}}</label>
+          <input type="text" name="sceneName" value="{{p.sceneName}}">
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Seed"}}</label>
+          <div class="hw-seed">
+            <input type="text" name="seed" value="{{p.seed}}">
+            <button type="button" data-action="randomSeed" data-tooltip="{{localize 'HEXWORLD.RandomSeed'}}">
+              <i class="fa-solid fa-dice"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Template"}}</label>
+          <select name="template">
+            {{#each templates}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>{{localize "HEXWORLD.Grid"}}</legend>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.GridType"}}</label>
+          <select name="gridType">
+            {{#each gridTypes}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </div>
+        <div class="form-group hw-pair">
+          <label>{{localize "HEXWORLD.Columns"}}</label>
+          <input type="number" name="cols" value="{{p.cols}}" min="8" max="250" step="1">
+          <label>{{localize "HEXWORLD.Rows"}}</label>
+          <input type="number" name="rows" value="{{p.rows}}" min="8" max="250" step="1">
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.CellSize"}}</label>
+          <input type="number" name="cellSize" value="{{p.cellSize}}" min="50" max="300" step="10">
+        </div>
+        <div class="form-group hw-pair">
+          <label>{{localize "HEXWORLD.Distance"}}</label>
+          <input type="number" name="distance" value="{{p.distance}}" min="0.01" step="any">
+          <label>{{localize "HEXWORLD.Units"}}</label>
+          <input type="text" name="units" value="{{p.units}}">
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>{{localize "HEXWORLD.Terrain"}}</legend>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.WaterPct"}}</label>
+          <div class="hw-range">
+            <input type="range" name="waterFraction" value="{{p.waterFraction}}" min="0.1" max="0.85" step="0.01">
+            <output></output>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Climate"}}</label>
+          <select name="climate">
+            {{#each climates}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Moisture"}}</label>
+          <div class="hw-range">
+            <input type="range" name="moisture" value="{{p.moisture}}" min="0.5" max="1.5" step="0.05">
+            <output></output>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Rivers"}}</label>
+          <div class="hw-range">
+            <input type="range" name="riverDensity" value="{{p.riverDensity}}" min="0" max="1" step="0.05">
+            <output></output>
+          </div>
+        </div>
+      </fieldset>
+    </form>
+
+    <div class="hw-buttons">
+      <button type="button" class="hw-generate" data-action="generate">
+        <i class="fa-solid fa-mountain-sun"></i> {{localize "HEXWORLD.Generate"}}
+      </button>
+      <button type="button" class="hw-create" data-action="createScene" disabled>
+        <i class="fa-solid fa-map"></i> {{localize "HEXWORLD.CreateScene"}}
+      </button>
+    </div>
+  </section>
+
+  <section class="hw-preview">
+    <canvas class="hw-canvas" width="640" height="480"></canvas>
+    <div class="hw-stats">{{localize "HEXWORLD.NoWorld"}}</div>
+  </section>
+</div>

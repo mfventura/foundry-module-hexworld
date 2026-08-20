@@ -1,0 +1,116 @@
+/* HexWorld – generator window */
+
+.hexworld-app .hw-layout {
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 12px;
+  padding: 4px;
+}
+
+.hexworld-app .hw-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hexworld-app fieldset {
+  border: 1px solid var(--color-border-light-2, #7a7971);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 0 0 6px 0;
+}
+
+.hexworld-app legend {
+  font-weight: bold;
+  padding: 0 4px;
+}
+
+.hexworld-app .form-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.hexworld-app .form-group > label {
+  flex: 0 0 130px;
+  font-size: var(--font-size-13, 13px);
+}
+
+.hexworld-app .form-group > input,
+.hexworld-app .form-group > select,
+.hexworld-app .hw-seed,
+.hexworld-app .hw-range {
+  flex: 1;
+  min-width: 0;
+}
+
+.hexworld-app .hw-pair > label {
+  flex: 0 0 auto;
+}
+
+.hexworld-app .hw-pair > input {
+  flex: 1;
+  min-width: 40px;
+}
+
+.hexworld-app .hw-seed {
+  display: flex;
+  gap: 4px;
+}
+
+.hexworld-app .hw-seed button {
+  flex: 0 0 32px;
+  line-height: 1;
+}
+
+.hexworld-app .hw-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hexworld-app .hw-range output {
+  flex: 0 0 42px;
+  text-align: right;
+  font-size: var(--font-size-12, 12px);
+  opacity: 0.85;
+}
+
+.hexworld-app .hw-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.hexworld-app .hw-buttons button {
+  flex: 1;
+  padding: 6px 4px;
+}
+
+.hexworld-app .hw-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hexworld-app .hw-canvas {
+  max-width: 100%;
+  border: 1px solid var(--color-border-dark-3, #444);
+  border-radius: 4px;
+  background: #1e3d60;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+}
+
+.hexworld-app .hw-stats {
+  font-size: var(--font-size-12, 12px);
+  opacity: 0.9;
+  text-align: center;
+}
+
+/* Scenes sidebar button */
+.hexworld-open {
+  width: 100%;
+  margin-top: 4px;
+}
