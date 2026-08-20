@@ -61,12 +61,15 @@ Hooks.on("getSceneControlButtons", controls => {
       raise: { name: "raise", order: 1, title: "HEXWORLD.ToolRaise", icon: "fa-solid fa-arrow-up-from-ground-water" },
       lower: { name: "lower", order: 2, title: "HEXWORLD.ToolLower", icon: "fa-solid fa-arrow-down" },
       smooth: { name: "smooth", order: 3, title: "HEXWORLD.ToolSmooth", icon: "fa-solid fa-wand-magic-sparkles" },
+      water: { name: "water", order: 4, title: "HEXWORLD.ToolWater", icon: "fa-solid fa-water" },
+      land: { name: "land", order: 5, title: "HEXWORLD.ToolLand", icon: "fa-solid fa-seedling" },
+      mountain: { name: "mountain", order: 6, title: "HEXWORLD.ToolMountain", icon: "fa-solid fa-mountain" },
       undo: {
-        name: "undo", order: 4, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
+        name: "undo", order: 7, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
         button: true, onChange: () => canvas.hexworld?.undo()
       },
       reset: {
-        name: "reset", order: 5, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 8, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
     }

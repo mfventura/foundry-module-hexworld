@@ -15,7 +15,7 @@ import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 
 const UNDO_LIMIT = 20;
-const PAINT_TOOLS = new Set(["raise", "lower", "smooth"]);
+const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain"]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   static get layerOptions() {
