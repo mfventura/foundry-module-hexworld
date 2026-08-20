@@ -51,7 +51,11 @@ Hooks.on("getSceneControlButtons", controls => {
     icon: "fa-solid fa-earth-europe",
     layer: "hexworld",
     activeTool: "raise",
-    onChange: () => {},
+    // v13+: SceneControls ya no activa canvas[control.layer]; cada control debe
+    // activar su capa (mismo patrón que WallsLayer.prepareSceneControls en el core).
+    onChange: (_event, active) => {
+      if (active) canvas.hexworld?.activate();
+    },
     onToolChange: () => {},
     tools: {
       raise: { name: "raise", order: 1, title: "HEXWORLD.ToolRaise", icon: "fa-solid fa-arrow-up-from-ground-water" },
