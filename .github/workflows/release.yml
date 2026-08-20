@@ -6,7 +6,7 @@
 # zips the module with files at the archive root (as Foundry expects), and
 # attaches module.json + module.zip to the GitHub release. The stable install
 # manifest is always:
-#   https://github.com/mfventura/hexworld/releases/latest/download/module.json
+#   https://github.com/mfventura/foundry-module-hexworld/releases/latest/download/module.json
 
 name: Release
 

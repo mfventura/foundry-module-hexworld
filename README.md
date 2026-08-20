@@ -21,7 +21,7 @@ Módulo de generación procedural de mundos de fantasía totalmente integrado en
 En Foundry: **Add-on Modules → Install Module** y pega esta URL de manifiesto:
 
 ```
-https://github.com/mfventura/hexworld/releases/latest/download/module.json
+https://github.com/mfventura/foundry-module-hexworld/releases/latest/download/module.json
 ```
 
 Apunta siempre a la última release publicada, así que las actualizaciones llegan por el botón *Update* de Foundry.
