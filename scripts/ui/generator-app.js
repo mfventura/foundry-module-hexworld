@@ -8,6 +8,7 @@
 
 import { buildBase, deriveWorld, MAX_CELLS } from "../generator/worldgen.js";
 import { TEMPLATES } from "../generator/heightmap.js";
+import { applyBrush } from "../generator/brush.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString } from "../lib/random.js";
@@ -287,32 +288,12 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #applyBrush(ev) {
     const point = this.#canvasPoint(ev);
     if (!point) return;
-    const { grid, elevBase } = this.#base;
+    const { grid } = this.#base;
     this.#edits ??= new Float32Array(grid.n);
     const { radius, strength } = this.#brushSettings();
-    const radiusPx = radius * grid.size;
-    const r2 = radiusPx * radiusPx;
-    const edits = this.#edits;
-
-    for (let c = 0; c < grid.n; c++) {
-      const dx = grid.cx[c] - point.x;
-      const dy = grid.cy[c] - point.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 > r2) continue;
-      const falloff = (1 - Math.sqrt(d2) / radiusPx) ** 2;
-      if (!this.#strokeUndo.has(c)) this.#strokeUndo.set(c, edits[c]);
-
-      if (this.#tool === "raise") edits[c] += strength * falloff;
-      else if (this.#tool === "lower") edits[c] -= strength * falloff;
-      else if (this.#tool === "smooth") {
-        const nbs = grid.neighbors[c];
-        if (!nbs.length) continue;
-        let sum = 0;
-        for (const nb of nbs) sum += Math.min(1, Math.max(0, elevBase[nb] + edits[nb]));
-        const current = Math.min(1, Math.max(0, elevBase[c] + edits[c]));
-        edits[c] += (sum / nbs.length - current) * Math.min(1, strength * 8) * falloff;
-      }
-    }
+    applyBrush(this.#base, this.#edits, this.#strokeUndo, {
+      tool: this.#tool, radius, strength, x: point.x, y: point.y
+    });
 
     // Live feedback, throttled harder on big maps where a derive is costlier.
     const now = performance.now();
@@ -390,7 +371,6 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const params = this.#readParams();
     target.disabled = true;
     try {
-      ui.notifications.info(game.i18n.localize("HEXWORLD.NotifyRendering"));
       const scene = await createSceneFromWorld(this.#world, {
         sceneName: params.sceneName,
         distance: params.distance,

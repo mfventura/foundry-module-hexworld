@@ -44,7 +44,7 @@
   "HEXWORLD.CreateScene": "Create scene",
   "HEXWORLD.NoWorld": "Press “Generate preview” to create a world.",
   "HEXWORLD.StatsSummary": "{cells} cells · {land}% land · {rivers} river cells · {lakes} lake cells",
-  "HEXWORLD.NotifyRendering": "HexWorld: rendering the map image…",
+  "HEXWORLD.Controls": "HexWorld Terrain",
   "HEXWORLD.NotifySceneCreated": "HexWorld: scene “{name}” created.",
   "HEXWORLD.ErrGenerate": "HexWorld: error during generation. Check the console (F12).",
   "HEXWORLD.ErrNoWorld": "Generate a world preview first.",

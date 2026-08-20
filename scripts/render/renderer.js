@@ -1,9 +1,7 @@
 /**
- * Canvas renderer: paints the generated world as a polished map image.
- * The same vector drawing is used for the UI preview (scaled down) and the
- * full-resolution scene background (scaled to stay under canvas size limits —
- * Foundry stretches the background to the scene dimensions, so a downscaled
- * image still aligns with the grid).
+ * Canvas renderer: paints the world into a 2D canvas. Used by the generator
+ * preview (scaled down) and by the in-scene TerrainMesh, which turns the
+ * same drawing into a PIXI texture stretched to the scene dimensions.
  */
 
 import { B, BIOME_COLORS } from "../generator/biomes.js";
@@ -12,7 +10,6 @@ const DEEP_OCEAN = [30, 61, 96];
 const SHALLOW_OCEAN = [77, 129, 174];
 const RIVER_COLOR = "rgba(66, 106, 152, 0.95)";
 const COAST_COLOR = "rgba(30, 45, 65, 0.8)";
-const MAX_IMAGE_SIDE = 13000;
 
 function hexToRgb(hex) {
   const v = parseInt(hex.slice(1), 16);
@@ -182,19 +179,4 @@ export function renderWorld(world, canvas, scale = 1) {
 export function previewScale(world, maxW, maxH) {
   const g = world.grid;
   return Math.min(1, maxW / g.pixelWidth, maxH / g.pixelHeight);
-}
-
-/**
- * Full-resolution render to an image Blob (webp, png fallback), capped so the
- * canvas never exceeds browser limits.
- */
-export async function renderWorldToBlob(world) {
-  const g = world.grid;
-  const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(g.pixelWidth, g.pixelHeight));
-  const canvas = document.createElement("canvas");
-  renderWorld(world, canvas, scale);
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", 0.92));
-  if (blob) return { blob, ext: "webp" };
-  const png = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-  return { blob: png, ext: "png" };
 }

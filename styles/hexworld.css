@@ -149,6 +149,47 @@
   text-align: center;
 }
 
+/* In-scene brush HUD */
+#hexworld-brush-hud {
+  position: fixed;
+  left: 110px;
+  bottom: 14px;
+  z-index: 60;
+  width: 250px;
+  padding: 8px 10px;
+  background: rgba(20, 24, 30, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #eee;
+  font-size: 12px;
+}
+
+#hexworld-brush-hud .hw-hud-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+#hexworld-brush-hud .hw-hud-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+
+#hexworld-brush-hud .hw-hud-row label {
+  flex: 0 0 55px;
+}
+
+#hexworld-brush-hud .hw-hud-row input[type=range] {
+  flex: 1;
+  min-width: 0;
+}
+
+#hexworld-brush-hud .hw-hud-row output {
+  flex: 0 0 36px;
+  text-align: right;
+}
+
 /* Scenes sidebar button */
 .hexworld-open {
   width: 100%;

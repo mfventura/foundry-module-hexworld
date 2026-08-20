@@ -14,8 +14,8 @@ Módulo de generación procedural de mundos de fantasía totalmente integrado en
   5. Hidrología real: relleno de depresiones (priority-flood), acumulación de flujo, ríos conectados que desembocan en el mar y lagos en cuencas cerradas.
   6. Biomas tipo Whittaker (temperatura × humedad) con montañas, nieves, glaciares, humedales y playas.
 - **Render cartográfico**: sombreado de relieve (hillshade), gradiente de profundidad oceánica, línea de costa y ríos con grosor según caudal.
-- **Edición manual del terreno**: pinceles de elevar, hundir y suavizar directamente sobre la previsualización, con radio y fuerza ajustables, deshacer por trazo y recálculo en vivo de ríos, lagos y biomas. Las ediciones se guardan (comprimidas) en las flags de la escena.
-- **Creación de escena en un clic**: sube la imagen (webp) a `worlds/<mundo>/hexworld/` y crea la escena con rejilla, distancia y unidades configuradas.
+- **Escenas data-driven, sin imagen**: la escena no guarda ningún fichero — solo los datos del mundo (semilla + parámetros + ediciones) en sus flags. Una capa de canvas del módulo regenera el mundo determinísticamente y lo dibuja al abrir la escena.
+- **Edición del terreno en la propia escena**: grupo de controles «Terreno HexWorld» (solo GM) con pinceles de elevar, hundir y suavizar, HUD de radio/fuerza, deshacer por trazo y descartar. Ríos, lagos, costas y biomas se recalculan en vivo mientras pintas, y los cambios se sincronizan a todos los clientes al soltar el trazo. Los mismos pinceles están disponibles en la previsualización antes de crear la escena.
 
 ## Instalación
 
@@ -56,18 +56,23 @@ También disponible por API/macro: `game.modules.get("hexworld").api.open()`.
 
 ```
 scripts/
-  main.js                  # hooks, botón del sidebar, API pública
-  lib/random.js            # PRNG con semilla (xmur3 + mulberry32)
-  lib/noise.js             # simplex 2D, fBm, ridged
-  generator/grid.js        # WorldGrid: geometría/adyacencia vía foundry.grid.*
-  generator/heightmap.js   # alturas + plantillas + nivel del mar
-  generator/climate.js     # temperatura y humedad
-  generator/hydrology.js   # océanos, lagos, relleno de depresiones, flujo, ríos
-  generator/biomes.js      # tabla de biomas y colores
-  generator/worldgen.js    # orquestador del pipeline
-  render/renderer.js       # render a canvas (preview y fondo de escena)
-  scene/scene-builder.js   # subida de imagen y creación de la Escena
-  ui/generator-app.js      # ventana ApplicationV2
+  main.js                    # hooks, capa, scene controls, botón del sidebar, API
+  lib/random.js              # PRNG con semilla (xmur3 + mulberry32)
+  lib/noise.js               # simplex 2D, fBm, ridged
+  lib/codec.js               # codificación de ediciones (Int8+base64) para flags
+  generator/grid.js          # WorldGrid: geometría/adyacencia vía foundry.grid.*
+  generator/heightmap.js     # alturas + plantillas + nivel del mar
+  generator/climate.js       # temperatura y humedad
+  generator/hydrology.js     # océanos/mares interiores, lagos, flujo, ríos
+  generator/biomes.js        # tabla de biomas y colores
+  generator/brush.js         # pincel de terreno compartido (preview y escena)
+  generator/worldgen.js      # orquestador: buildBase + deriveWorld
+  render/renderer.js         # render 2D a canvas (preview y textura de escena)
+  canvas/hexworld-layer.js   # capa de interacción: edición en escena y sync
+  canvas/terrain-mesh.js     # PrimarySpriteMesh con la textura del terreno
+  canvas/brush-hud.js        # HUD flotante de radio/fuerza
+  scene/scene-builder.js     # creación de la Escena (solo datos, sin imagen)
+  ui/generator-app.js        # ventana ApplicationV2 del generador
 ```
 
 ## Compatibilidad
@@ -76,9 +81,10 @@ Foundry VTT **v14** (mínimo v13). Sin dependencias ni build step (ESM puro). El
 
 ## Hoja de ruta
 
-- [x] Edición manual del terreno (elevar/hundir/suavizar) antes de crear la escena.
+- [x] Edición manual del terreno (elevar/hundir/suavizar), en la previsualización y en la escena creada.
+- [ ] Pincel de bioma y de agua (overrides por celda, forzar lago/mar).
+- [ ] Relleno por texturas: un asset hexagonal por bioma (atlas configurable por el GM).
+- [ ] «Hornear» a imagen: exportar el estado actual como background estático.
 - [ ] Nombres procedurales (mares, cordilleras, regiones) con etiquetas como Drawings/Notes.
 - [ ] Asentamientos, estados y carreteras.
-- [ ] Pincel de bioma y de agua (forzar lago/mar).
-- [ ] Exportar/importar datos del mundo; regenerar escena desde flags (las flags ya guardan params + edits).
 - [ ] Capas: precipitación, temperatura, altura (modo de vista de depuración).
