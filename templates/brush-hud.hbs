@@ -21,6 +21,7 @@
       <option value="height" {{#if (eq viewMode "height")}}selected{{/if}}>{{localize "HEXWORLD.ViewHeight"}}</option>
       <option value="temp" {{#if (eq viewMode "temp")}}selected{{/if}}>{{localize "HEXWORLD.ViewTemp"}}</option>
       <option value="moist" {{#if (eq viewMode "moist")}}selected{{/if}}>{{localize "HEXWORLD.ViewMoist"}}</option>
+      <option value="realms" {{#if (eq viewMode "realms")}}selected{{/if}}>{{localize "HEXWORLD.ViewRealms"}}</option>
     </select>
   </div>
   <div class="hw-hud-subtitle">{{localize "HEXWORLD.ToolBiome"}}</div>
@@ -39,6 +40,15 @@
             data-tooltip="{{label}}"><i class="{{icon}}"></i></button>
     {{/each}}
   </div>
+  {{#if realmSwatches.length}}
+  <div class="hw-hud-subtitle">{{localize "HEXWORLD.RealmsTitle"}}</div>
+  <div class="hw-palette">
+    {{#each realmSwatches}}
+    <button type="button" class="hw-swatch hw-realm-swatch{{#if active}} active{{/if}}" data-realm="{{id}}"
+            data-tooltip="{{label}}" style="--swatch: {{color}}">{{#if erase}}<i class="fa-solid fa-eraser"></i>{{/if}}</button>
+    {{/each}}
+  </div>
+  {{/if}}
   <button type="button" class="hw-sea-btn"><i class="fa-solid fa-arrow-up-from-water-pump"></i> {{localize "HEXWORLD.SeaLevel"}}</button>
   <div class="hw-hud-info"></div>
 </div>

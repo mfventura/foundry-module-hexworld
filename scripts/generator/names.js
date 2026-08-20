@@ -10,6 +10,7 @@
  */
 
 import { SITE } from "./sites.js";
+import { realmCapitals } from "./realms.js";
 
 const ONSETS = [
   "Val", "Bel", "Cor", "Dor", "Fal", "Gal", "Hel", "Kar", "Lor", "Mar", "Mor",
@@ -51,7 +52,8 @@ export const DEFAULT_PATTERNS = {
   ruin: n => `Ruinas de ${n}`,
   river: n => `Río ${n}`,
   lake: n => `Lago ${n}`,
-  sea: n => `Mar de ${n}`
+  sea: n => `Mar de ${n}`,
+  realm: n => `Reino de ${n}`
 };
 
 /** i18n-backed patterns (browser only). */
@@ -65,7 +67,8 @@ export function i18nNamePatterns() {
     ruin: f("PatRuin"),
     river: f("PatRiver"),
     lake: f("PatLake"),
-    sea: f("PatSea")
+    sea: f("PatSea"),
+    realm: f("PatRealm")
   };
 }
 
@@ -90,12 +93,41 @@ function riverMouth(world, c) {
 }
 
 /**
- * Every nameable feature and where its label belongs.
- * @returns {{sites: {key,cell,type}[], rivers: {key,cell,size}[], waters: {key,cell,size,isSea}[]}}
+ * Every nameable feature and where its label belongs. Realms come from
+ * world.realms (attached by the callers, like world.sites).
+ * @returns {{sites: {key,cell,type}[], rivers: {key,cell,size}[],
+ *            waters: {key,cell,size,isSea}[], realms: {key,cell,id,size}[]}}
  */
 export function computeLabelAnchors(world, sites) {
   const { grid, isRiver, isWater, isOcean, flowTo, flux } = world;
-  const out = { sites: [], rivers: [], waters: [] };
+  const out = { sites: [], rivers: [], waters: [], realms: [] };
+
+  const realms = world.realms ?? null;
+  if (realms) {
+    const acc = new Map(); // id -> {sx, sy, count}
+    for (let c = 0; c < grid.n; c++) {
+      const id = realms[c];
+      if (!id || isWater[c]) continue;
+      const a = acc.get(id) ?? { sx: 0, sy: 0, count: 0 };
+      a.sx += grid.cx[c];
+      a.sy += grid.cy[c];
+      a.count++;
+      acc.set(id, a);
+    }
+    for (const [id, a] of acc) {
+      if (a.count < 10) continue;
+      const cx = a.sx / a.count, cy = a.sy / a.count;
+      let anchor = -1, bd = Infinity;
+      for (let c = 0; c < grid.n; c++) {
+        if (realms[c] !== id || isWater[c]) continue;
+        const dx = grid.cx[c] - cx, dy = grid.cy[c] - cy;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; anchor = c; }
+      }
+      if (anchor >= 0) out.realms.push({ key: `k${id}`, cell: anchor, id, size: a.count });
+    }
+    out.realms.sort((a, b) => a.id - b.id);
+  }
 
   if (sites) {
     for (let c = 0; c < grid.n; c++) {
@@ -183,6 +215,16 @@ export function generateNames(world, sites, existing, rng, patterns = null) {
   for (const w of anchors.waters) {
     if (!names[w.key]) names[w.key] = (w.isSea ? P.sea : P.lake)(namer());
   }
+  // Realms are named after their capital city when it has a name.
+  if (anchors.realms.length) {
+    const capitals = realmCapitals(world, sites);
+    for (const r of anchors.realms) {
+      if (names[r.key]) continue;
+      const capital = capitals[r.id - 1];
+      const capitalName = capital != null ? names[`s${capital}`] : null;
+      names[r.key] = P.realm(capitalName || namer());
+    }
+  }
   return names;
 }
 
@@ -207,5 +249,7 @@ export function nameKeyAt(world, sites, c) {
     }
     return `l${minC}`;
   }
+  const realm = world.realms?.[c];
+  if (realm) return `k${realm}`;
   return null;
 }

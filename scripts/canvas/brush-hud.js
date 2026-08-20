@@ -10,6 +10,7 @@ import { configuredSiteIcons } from "../render/site-icons.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
+import { REALM_COLORS } from "../render/renderer.js";
 
 export const SITE_TYPES = [
   { id: SITE.VILLAGE, key: "SiteVillage" },
@@ -66,8 +67,32 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       showLabels: this.layer.showLabels,
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
-      siteTypes: siteTypeContext(this.layer.brush.site)
+      siteTypes: siteTypeContext(this.layer.brush.site),
+      realmSwatches: this.#realmSwatches()
     };
+  }
+
+  /** One swatch per realm present in the channel, plus the wilderness eraser. */
+  #realmSwatches() {
+    const realms = this.layer.realms;
+    if (!realms) return [];
+    const ids = [...new Set(realms)].filter(id => id > 0).sort((a, b) => a - b);
+    if (!ids.length) return [];
+    const out = ids.map(id => {
+      const [r, g, b] = REALM_COLORS[(id - 1) % REALM_COLORS.length];
+      return {
+        id,
+        color: `rgb(${r},${g},${b})`,
+        label: this.layer.names?.[`k${id}`] ?? `${game.i18n.localize("HEXWORLD.RealmsTitle")} ${id}`,
+        active: this.layer.brush.realm === id
+      };
+    });
+    out.push({
+      id: 0, color: "rgba(0,0,0,0.35)", erase: true,
+      label: game.i18n.localize("HEXWORLD.RealmWilderness"),
+      active: this.layer.brush.realm === 0
+    });
+    return out;
   }
 
   _onRender(_context, _options) {
@@ -100,6 +125,16 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
           b.classList.toggle("active", b === btn);
         }
         activateHexTab("sites", "site");
+      });
+    }
+
+    for (const btn of this.element.querySelectorAll(".hw-realm-swatch")) {
+      btn.addEventListener("click", () => {
+        this.layer.brush.realm = Number(btn.dataset.realm);
+        for (const b of this.element.querySelectorAll(".hw-realm-swatch")) {
+          b.classList.toggle("active", b === btn);
+        }
+        activateHexTab("sites", "realm");
       });
     }
 

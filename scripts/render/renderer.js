@@ -13,6 +13,17 @@ const SHALLOW_OCEAN = [77, 129, 174];
 const RIVER_COLOR = "rgba(66, 106, 152, 0.95)";
 const COAST_COLOR = "rgba(30, 45, 65, 0.8)";
 
+/** Distinguishable, muted hues for realm ids 1..10 (cycled beyond). */
+export const REALM_COLORS = [
+  [201, 79, 79], [79, 125, 201], [88, 160, 90], [181, 140, 62], [139, 95, 176],
+  [62, 160, 160], [201, 116, 79], [160, 86, 139], [107, 125, 62], [90, 106, 176]
+];
+const WILDERNESS_RGB = [178, 172, 156];
+
+function realmRgb(id) {
+  return REALM_COLORS[(id - 1) % REALM_COLORS.length];
+}
+
 function hexToRgb(hex) {
   const v = parseInt(hex.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
@@ -112,6 +123,17 @@ const MOIST_RAMP = [
 /** False-color views: raw pipeline fields for inspection while editing. */
 function cellColorDebug(world, c, mode) {
   const { elev, sea, temp, moist, isWater } = world;
+  if (mode === "realms") {
+    if (world.isOcean?.[c]) {
+      const depth = Math.pow(Math.max(0, Math.min(1, (sea - elev[c]) / (sea * 0.9 || 1))), 0.7);
+      return css(lerpRgb(SHALLOW_OCEAN, DEEP_OCEAN, depth), 0.85);
+    }
+    if (isWater[c]) return css([93, 143, 191]);
+    const id = world.realms?.[c] ?? 0;
+    const base = id ? realmRgb(id) : WILDERNESS_RGB;
+    const above = Math.max(0, (elev[c] - sea) / (1 - sea || 1));
+    return css(base, 0.9 + 0.25 * above);
+  }
   if (mode === "height") {
     if (elev[c] < sea) {
       const depth = Math.max(0, Math.min(1, (sea - elev[c]) / (sea || 1)));
@@ -160,6 +182,63 @@ function drawRivers(ctx, world) {
     ctx.lineTo(grid.cx[t], grid.cy[t]);
     ctx.stroke();
   }
+}
+
+/**
+ * Realm overlay: a soft per-cell tint (terrain view only) plus border strokes
+ * along polygon edges where the realm changes on land — coastlines already
+ * separate realms from the water.
+ */
+function drawRealms(ctx, world, mode) {
+  const realms = world.realms;
+  if (!realms) return;
+  const { grid, isWater } = world;
+
+  if (mode === "terrain") {
+    for (let c = 0; c < grid.n; c++) {
+      const id = realms[c];
+      if (!id || isWater[c]) continue;
+      const [r, g, b] = realmRgb(id);
+      tracePoly(ctx, grid.polys[c]);
+      ctx.fillStyle = `rgba(${r},${g},${b},0.12)`;
+      ctx.fill();
+    }
+  }
+
+  ctx.lineWidth = grid.size * 0.06;
+  ctx.lineCap = "round";
+  ctx.setLineDash([grid.size * 0.22, grid.size * 0.14]);
+  for (let c = 0; c < grid.n; c++) {
+    if (isWater[c]) continue;
+    const id = realms[c];
+    const flat = grid.polys[c];
+    const m = flat.length;
+    const [r, g, b] = id ? realmRgb(id) : WILDERNESS_RGB;
+    ctx.strokeStyle = `rgba(${Math.round(r * 0.6)},${Math.round(g * 0.6)},${Math.round(b * 0.6)},0.7)`;
+    ctx.beginPath();
+    let any = false;
+    for (let k = 0; k < m; k += 2) {
+      const x1 = flat[k], y1 = flat[k + 1];
+      const x2 = flat[(k + 2) % m], y2 = flat[(k + 3) % m];
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      let best = -1, bestD = Infinity;
+      for (const nb of grid.neighbors[c]) {
+        const dx = grid.cx[nb] - mx, dy = grid.cy[nb] - my;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = nb; }
+      }
+      const dxc = grid.cx[c] - mx, dyc = grid.cy[c] - my;
+      if (best < 0 || bestD >= dxc * dxc + dyc * dyc) continue; // map border edge
+      if (isWater[best] || realms[best] === id) continue;
+      // Draw each border edge once, from the higher realm id side.
+      if (id < (realms[best] ?? 0)) continue;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      any = true;
+    }
+    if (any) ctx.stroke();
+  }
+  ctx.setLineDash([]);
 }
 
 /**
@@ -260,6 +339,19 @@ function drawLabels(ctx, world) {
     ctx.fillText(text, x, y);
   };
 
+  // Realm names: large, translucent, under every other label.
+  ctx.textBaseline = "middle";
+  for (const a of anchors.realms) {
+    const name = names[a.key];
+    if (!name) continue;
+    const size = s * 0.8;
+    ctx.font = `bold ${Math.round(size)}px "Signika", serif`;
+    ctx.lineWidth = Math.max(2, size * 0.16);
+    ctx.strokeStyle = "rgba(245, 240, 225, 0.55)";
+    ctx.fillStyle = "rgba(52, 38, 24, 0.65)";
+    halo(name, grid.cx[a.cell], grid.cy[a.cell]);
+  }
+
   ctx.textBaseline = "top";
   for (const a of anchors.sites) {
     const name = names[a.key];
@@ -328,9 +420,9 @@ function drawCoast(ctx, world) {
 
 /**
  * Render the world into a canvas at the given scale.
- * @param {string} mode "terrain" (default) or a false-color debug view:
- *   "height" | "temp" | "moist". Debug views keep the coastline (and rivers
- *   on the height view) for orientation.
+ * @param {string} mode "terrain" (default), the political view "realms", or
+ *   a false-color debug view: "height" | "temp" | "moist". Debug views keep
+ *   the coastline for orientation.
  */
 export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   const g = world.grid;
@@ -342,9 +434,11 @@ export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   ctx.fillStyle = css(DEEP_OCEAN);
   ctx.fillRect(0, 0, g.pixelWidth, g.pixelHeight);
   drawCells(ctx, world, mode);
-  if (mode === "terrain" || mode === "height") drawRivers(ctx, world);
+  const overlays = mode === "terrain" || mode === "height" || mode === "realms";
+  if (mode === "terrain" || mode === "realms") drawRealms(ctx, world, mode);
+  if (overlays) drawRivers(ctx, world);
   drawCoast(ctx, world);
-  if (mode === "terrain" || mode === "height") {
+  if (overlays) {
     drawRoads(ctx, world);
     drawSites(ctx, world);
     drawLabels(ctx, world);

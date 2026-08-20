@@ -14,6 +14,7 @@ import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString, makeRng } from "../lib/random.js";
 import { SITE, generateSettlements, routeRoad } from "../generator/sites.js";
+import { generateRealms } from "../generator/realms.js";
 import { generateNames, i18nNamePatterns, nameKeyAt } from "../generator/names.js";
 import { siteTypeContext } from "../canvas/brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
@@ -38,6 +39,7 @@ const DEFAULT_PARAMS = {
   moisture: 1.0,
   riverDensity: 0.5,
   settlements: 0.5,
+  realms: 0.5,
   distance: 10,
   units: "km"
 };
@@ -87,6 +89,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #sites = null;
   /** @type {Uint8Array|null} road network per cell */
   #roads = null;
+  /** @type {Uint8Array|null} realm id per cell */
+  #realms = null;
   /** @type {Record<string, string>|null} feature names */
   #names = null;
   #routeAnchor = -1;
@@ -300,6 +304,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       this.#riverEdits = decodeBytes(flags.rivers ?? null, n);
       this.#sites = decodeBytes(flags.sites ?? null, n);
       this.#roads = decodeBytes(flags.roads ?? null, n);
+      this.#realms = decodeBytes(flags.realms ?? null, n);
       this.#names = { ...(flags.names ?? {}) };
       this.#undoStack = [];
       this.#redoStack = [];
@@ -341,6 +346,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       moisture: clamp(data.moisture, 0.5, 1.5),
       riverDensity: clamp(data.riverDensity, 0, 1),
       settlements: clamp(data.settlements ?? 0.5, 0, 1),
+      realms: clamp(data.realms ?? 0.5, 0, 1),
       distance: clamp(data.distance, 0.01, 100000),
       units: String(data.units || "km")
     };
@@ -460,6 +466,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#world = deriveWorld(this.#base, this.#edits, this.#overrides, this.#riverEdits);
     this.#world.sites = this.#sites;
     this.#world.roads = this.#roads;
+    this.#world.realms = this.#realms;
     this.#world.names = this.#names ?? {};
     this.#drawPreview();
     this.#updateStats();
@@ -665,6 +672,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         this.#riverEdits = null;
         this.#sites = null;
         this.#roads = null;
+        this.#realms = null;
       }
       this.#undoStack = [];
       this.#redoStack = [];
@@ -694,6 +702,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#roads = roads;
     this.#world.sites = sites;
     this.#world.roads = roads;
+    this.#realms = generateRealms(this.#world, sites, params.realms ?? 0.5);
+    this.#world.realms = this.#realms;
     this.#names = generateNames(this.#world, sites, null, makeRng(params.seed + ":names"), i18nNamePatterns());
     this.#world.names = this.#names;
     // Wholesale replacement is not stroke-undoable: drop stale history.
@@ -743,6 +753,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#riverEdits = null;
     this.#sites = null;
     this.#roads = null;
+    this.#realms = null;
     this.#names = null;
     this.#undoStack = [];
     this.#redoStack = [];
@@ -766,6 +777,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         "flags.hexworld.rivers": encodeBytes(this.#riverEdits),
         "flags.hexworld.sites": encodeBytes(this.#sites),
         "flags.hexworld.roads": encodeBytes(this.#roads),
+        "flags.hexworld.realms": encodeBytes(this.#realms),
         "flags.hexworld.stats": this.#world.stats
       };
       if (this.#names && Object.keys(this.#names).length) {

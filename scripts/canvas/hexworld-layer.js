@@ -29,7 +29,7 @@ const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
 const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site", "rename"]);
 const PAINT_TOOLS = new Set([
   "raise", "lower", "smooth", "water", "land", "mountain", "biome",
-  "site", "roadErase", "rename", ...RIVER_TOOLS, ...ROUTE_TOOLS
+  "site", "roadErase", "rename", "realm", ...RIVER_TOOLS, ...ROUTE_TOOLS
 ]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
@@ -47,12 +47,14 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   sites = null;
   /** @type {Uint8Array|null} road network per cell (ROAD values) */
   roads = null;
+  /** @type {Uint8Array|null} realm id per cell (0 = wilderness) */
+  realms = null;
   /** @type {Record<string, string>} feature names (sparse, from flags) */
   names = {};
   /** Client-local label visibility (HUD toggle). */
   showLabels = true;
   world = null;
-  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE };
+  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE, realm: 1 };
   /** First endpoint of a pending two-click road route. */
   #routeAnchor = -1;
   /** Current render mode: terrain | height | temp | moist (client-local). */
@@ -156,7 +158,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#painting = false;
     this.#routeAnchor = -1;
     this.base = this.edits = this.overrides = this.riverEdits = null;
-    this.sites = this.roads = this.world = null;
+    this.sites = this.roads = this.realms = this.world = null;
     this.names = {};
   }
 
@@ -183,10 +185,12 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
       this.sites = decodeBytes(f.sites ?? null, this.base.grid.n);
       this.roads = decodeBytes(f.roads ?? null, this.base.grid.n);
+      this.realms = decodeBytes(f.realms ?? null, this.base.grid.n);
       this.names = { ...(f.names ?? {}) };
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.world.sites = this.sites;
       this.world.roads = this.roads;
+      this.world.realms = this.realms;
       this.#attachOverlays();
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
@@ -233,6 +237,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (tool === "biome") return "biome";
     if (RIVER_TOOLS.has(tool)) return "river";
     if (tool === "site") return "site";
+    if (tool === "realm") return "realm";
     if (ROUTE_TOOLS.has(tool) || tool === "roadErase") return "road";
     return "elev";
   }
@@ -320,6 +325,11 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       applyBiomeBrush(this.base, this.roads, this.#strokeUndo?.cells, {
         biome: 0, radius: this.brush.radius, x, y
       });
+    } else if (tool === "realm") {
+      this.realms ??= new Uint8Array(this.base.grid.n);
+      applyBiomeBrush(this.base, this.realms, this.#strokeUndo?.cells, {
+        biome: this.brush.realm, radius: this.brush.radius, x, y
+      });
     } else if (RIVER_TOOLS.has(tool)) {
       if (!this.world) return;
       this.riverEdits ??= new Uint8Array(this.base.grid.n);
@@ -353,6 +363,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
     this.world.sites = this.sites;
     this.world.roads = this.roads;
+    this.world.realms = this.realms;
     this.#attachOverlays();
     this.#mesh?.draw(this.world, this.viewMode);
   }
@@ -435,6 +446,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       "flags.hexworld.rivers": encodeBytes(this.riverEdits),
       "flags.hexworld.sites": encodeBytes(this.sites),
       "flags.hexworld.roads": encodeBytes(this.roads),
+      "flags.hexworld.realms": encodeBytes(this.realms),
       "flags.hexworld.stats": this.world.stats
     };
     // Object flags merge on update: adding keys is safe, but clearing the
@@ -448,7 +460,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   #applyStroke(stroke) {
     const target = {
       biome: this.overrides, river: this.riverEdits, elev: this.edits,
-      site: this.sites, road: this.roads
+      site: this.sites, road: this.roads, realm: this.realms
     }[stroke.channel];
     if (!target) return null;
     const inverse = new Map();
@@ -484,6 +496,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.riverEdits = null;
     this.sites = null;
     this.roads = null;
+    this.realms = null;
     this.names = {};
     this.#undoStack = [];
     this.#redoStack = [];
