@@ -60,6 +60,7 @@
   "HEXWORLD.BiomeBeach": "Playa",
   "HEXWORLD.BrushRadius": "Radio",
   "HEXWORLD.BrushStrength": "Fuerza",
+  "HEXWORLD.ToggleHud": "Mostrar/ocultar panel de edición",
   "HEXWORLD.Undo": "Deshacer último trazo",
   "HEXWORLD.Redo": "Rehacer trazo deshecho",
   "HEXWORLD.View": "Vista",

@@ -124,7 +124,11 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#mesh = null;
     this.#hud?.close();
     this.#deactivateCursor();
-    this.#cursor = null; // children are destroyed with the layer draw cycle
+    if (this.#cursor) {
+      this.removeChild(this.#cursor);
+      this.#cursor.destroy();
+      this.#cursor = null;
+    }
     this.#undoStack = [];
     this.#redoStack = [];
     this.#strokeUndo = null;
@@ -134,6 +138,9 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
   rebuildFromFlags() {
+    // Respect a HUD the GM deliberately closed: only restore it if it was
+    // open (or never created — first activation opens it anyway).
+    const hudWasOpen = this.#hud ? this.#hud.rendered : true;
     this.#destroyState();
     const f = canvas.scene?.flags?.hexworld;
     if (!f?.params || (f.version ?? 1) < 2) return;
@@ -145,10 +152,27 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
+      // A rebuild while the layer is active (sea-level change, remote edit)
+      // closed the HUD in #destroyState — bring it back.
+      if (this.active && game.user.isGM) {
+        if (hudWasOpen) {
+          this.#hud ??= new BrushHud(this);
+          this.#hud.render({ force: true });
+        }
+        this.#activateCursor();
+      }
     } catch (err) {
       console.error("HexWorld | Failed to build terrain for the viewed scene", err);
       this.#destroyState();
     }
+  }
+
+  /** Show or hide the brush panel (scene-controls button). */
+  toggleHud() {
+    if (!game.user.isGM || !this.world) return;
+    this.#hud ??= new BrushHud(this);
+    if (this.#hud.rendered) this.#hud.close();
+    else this.#hud.render({ force: true });
   }
 
   /* -------------------------------------------- */

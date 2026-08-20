@@ -69,20 +69,24 @@ Hooks.on("getSceneControlButtons", controls => {
       biome: { name: "biome", order: 7, title: "HEXWORLD.ToolBiome", icon: "fa-solid fa-palette" },
       riverAdd: { name: "riverAdd", order: 8, title: "HEXWORLD.ToolRiverAdd", icon: "fa-solid fa-wave-square" },
       riverRemove: { name: "riverRemove", order: 9, title: "HEXWORLD.ToolRiverRemove", icon: "fa-solid fa-droplet-slash" },
+      hud: {
+        name: "hud", order: 10, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
+        button: true, onChange: () => canvas.hexworld?.toggleHud()
+      },
       undo: {
-        name: "undo", order: 10, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
+        name: "undo", order: 11, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
         button: true, onChange: () => canvas.hexworld?.undo()
       },
       redo: {
-        name: "redo", order: 11, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
+        name: "redo", order: 12, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
         button: true, onChange: () => canvas.hexworld?.redo()
       },
       edit: {
-        name: "edit", order: 12, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
+        name: "edit", order: 13, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
         button: true, onChange: () => HexWorldGeneratorApp.openForScene(canvas.scene)
       },
       reset: {
-        name: "reset", order: 13, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 14, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
     }

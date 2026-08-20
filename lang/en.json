@@ -60,6 +60,7 @@
   "HEXWORLD.BiomeBeach": "Beach",
   "HEXWORLD.BrushRadius": "Radius",
   "HEXWORLD.BrushStrength": "Strength",
+  "HEXWORLD.ToggleHud": "Show/hide editing panel",
   "HEXWORLD.Undo": "Undo last stroke",
   "HEXWORLD.Redo": "Redo undone stroke",
   "HEXWORLD.View": "View",
