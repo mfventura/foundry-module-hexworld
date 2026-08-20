@@ -45,6 +45,9 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         biomesFormat: "u8",
         rivers: encodeBytes(world.riverEdits),
         riversFormat: "u8",
+        sites: encodeBytes(world.sites ?? null),
+        roads: encodeBytes(world.roads ?? null),
+        sitesFormat: "u8",
         stats: world.stats
       }
     }

@@ -58,7 +58,7 @@ Hooks.on("getSceneControlButtons", controls => {
     onChange: (_event, active) => {
       if (active) canvas.hexworld?.activate();
     },
-    onToolChange: () => {},
+    onToolChange: () => canvas.hexworld?.clearRouteAnchor(),
     tools: {
       raise: { name: "raise", order: 1, title: "HEXWORLD.ToolRaise", icon: "fa-solid fa-arrow-up-from-ground-water" },
       lower: { name: "lower", order: 2, title: "HEXWORLD.ToolLower", icon: "fa-solid fa-arrow-down" },
@@ -69,24 +69,28 @@ Hooks.on("getSceneControlButtons", controls => {
       biome: { name: "biome", order: 7, title: "HEXWORLD.ToolBiome", icon: "fa-solid fa-palette" },
       riverAdd: { name: "riverAdd", order: 8, title: "HEXWORLD.ToolRiverAdd", icon: "fa-solid fa-wave-square" },
       riverRemove: { name: "riverRemove", order: 9, title: "HEXWORLD.ToolRiverRemove", icon: "fa-solid fa-droplet-slash" },
+      site: { name: "site", order: 10, title: "HEXWORLD.ToolSite", icon: "fa-solid fa-location-dot" },
+      roadMinor: { name: "roadMinor", order: 11, title: "HEXWORLD.ToolRoadMinor", icon: "fa-solid fa-shoe-prints" },
+      roadMajor: { name: "roadMajor", order: 12, title: "HEXWORLD.ToolRoadMajor", icon: "fa-solid fa-road" },
+      roadErase: { name: "roadErase", order: 13, title: "HEXWORLD.ToolRoadErase", icon: "fa-solid fa-road-circle-xmark" },
       hud: {
-        name: "hud", order: 10, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
+        name: "hud", order: 14, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
         button: true, onChange: () => canvas.hexworld?.toggleHud()
       },
       undo: {
-        name: "undo", order: 11, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
+        name: "undo", order: 15, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
         button: true, onChange: () => canvas.hexworld?.undo()
       },
       redo: {
-        name: "redo", order: 12, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
+        name: "redo", order: 16, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
         button: true, onChange: () => canvas.hexworld?.redo()
       },
       edit: {
-        name: "edit", order: 13, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
+        name: "edit", order: 17, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
         button: true, onChange: () => HexWorldGeneratorApp.openForScene(canvas.scene)
       },
       reset: {
-        name: "reset", order: 14, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 18, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
     }

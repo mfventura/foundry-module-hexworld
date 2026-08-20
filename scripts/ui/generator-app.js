@@ -12,7 +12,9 @@ import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
-import { randomSeedString } from "../lib/random.js";
+import { randomSeedString, makeRng } from "../lib/random.js";
+import { SITE, generateSettlements, routeRoad } from "../generator/sites.js";
+import { SITE_TYPES } from "../canvas/brush-hud.js";
 import {
   NO_OVERRIDE, encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes
@@ -33,12 +35,15 @@ const DEFAULT_PARAMS = {
   climate: "temperate",
   moisture: 1.0,
   riverDensity: 0.5,
+  settlements: 0.5,
   distance: 10,
   units: "km"
 };
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
+const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
+const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site"]);
 
 export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static #instance = null;
@@ -76,6 +81,12 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #overrides = null;
   /** @type {Uint8Array|null} manual river edits (0 = derived) */
   #riverEdits = null;
+  /** @type {Uint8Array|null} settlements/POIs per cell */
+  #sites = null;
+  /** @type {Uint8Array|null} road network per cell */
+  #roads = null;
+  #routeAnchor = -1;
+  #brushSite = SITE.VILLAGE;
   /** @type {object|null} derived world currently shown in the preview */
   #world = null;
   #lastScale = 1;
@@ -113,7 +124,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       applyToScene: HexWorldGeneratorApp.#onApplyToScene,
       undoEdit: HexWorldGeneratorApp.#onUndoEdit,
       redoEdit: HexWorldGeneratorApp.#onRedoEdit,
-      resetEdits: HexWorldGeneratorApp.#onResetEdits
+      resetEdits: HexWorldGeneratorApp.#onResetEdits,
+      regenSites: HexWorldGeneratorApp.#onRegenSites
     }
   };
 
@@ -158,7 +170,16 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       active: id === this.#brushBiome
     }));
 
-    return { p, gridTypes, templates, climates, biomeSwatches, editSceneName: this.#editScene?.name ?? null };
+    const siteTypes = SITE_TYPES.map(t => ({
+      ...t,
+      label: game.i18n.localize(`HEXWORLD.${t.key}`),
+      active: t.id === this.#brushSite
+    }));
+
+    return {
+      p, gridTypes, templates, climates, biomeSwatches, siteTypes,
+      editSceneName: this.#editScene?.name ?? null
+    };
   }
 
   _onRender(_context, _options) {
@@ -194,11 +215,23 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     }
 
     // Biome palette: picking a color also switches to the biome tool.
-    for (const btn of root.querySelectorAll(".hw-palette .hw-swatch")) {
+    for (const btn of root.querySelectorAll(".hw-palette .hw-swatch[data-biome]")) {
       btn.addEventListener("click", () => {
         this.#brushBiome = Number(btn.dataset.biome);
         this.#tool = "biome";
-        for (const b of root.querySelectorAll(".hw-palette .hw-swatch")) {
+        for (const b of root.querySelectorAll(".hw-palette .hw-swatch[data-biome]")) {
+          b.classList.toggle("active", b === btn);
+        }
+        this.#refreshToolButtons();
+      });
+    }
+
+    // Site palette: picking a type also switches to the site tool.
+    for (const btn of root.querySelectorAll(".hw-site-swatch")) {
+      btn.addEventListener("click", () => {
+        this.#brushSite = Number(btn.dataset.site);
+        this.#tool = "site";
+        for (const b of root.querySelectorAll(".hw-site-swatch")) {
           b.classList.toggle("active", b === btn);
         }
         this.#refreshToolButtons();
@@ -265,6 +298,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       this.#edits = decodeEdits(flags.edits ?? null, n);
       this.#overrides = decodeOverrides(flags.biomes ?? null, n);
       this.#riverEdits = decodeBytes(flags.rivers ?? null, n);
+      this.#sites = decodeBytes(flags.sites ?? null, n);
+      this.#roads = decodeBytes(flags.roads ?? null, n);
       this.#undoStack = [];
       this.#redoStack = [];
       this.#derive();
@@ -304,6 +339,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       climate: String(data.climate),
       moisture: clamp(data.moisture, 0.5, 1.5),
       riverDensity: clamp(data.riverDensity, 0, 1),
+      settlements: clamp(data.settlements ?? 0.5, 0, 1),
       distance: clamp(data.distance, 0.01, 100000),
       units: String(data.units || "km")
     };
@@ -331,9 +367,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const rect = canvas.getBoundingClientRect();
 
     if (cursor) {
-      const isRiver = RIVER_TOOLS.has(this.#tool);
+      const isClick = CLICK_TOOLS.has(this.#tool);
       const { radius } = this.#brushSettings();
-      const worldR = isRiver ? this.#base.grid.size * 0.3 : radius * this.#base.grid.size;
+      const worldR = isClick ? this.#base.grid.size * 0.3 : radius * this.#base.grid.size;
       const screenR = worldR * this.#lastScale * (rect.width / (canvas.width || 1));
       const parentRect = cursor.offsetParent?.getBoundingClientRect() ?? rect;
       cursor.style.display = "block";
@@ -374,6 +410,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   }
 
   #refreshToolButtons() {
+    this.#routeAnchor = -1; // tool changes abort a pending route
     for (const btn of this.element.querySelectorAll(".hw-editbar [data-tool]")) {
       btn.classList.toggle("active", btn.dataset.tool === this.#tool);
     }
@@ -398,7 +435,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   /** Write a stroke's cell values into its channel; returns the inverse stroke. */
   #applyStroke(stroke) {
-    const target = { biome: this.#overrides, river: this.#riverEdits, elev: this.#edits }[stroke.channel];
+    const target = {
+      biome: this.#overrides, river: this.#riverEdits, elev: this.#edits,
+      site: this.#sites, road: this.#roads
+    }[stroke.channel];
     if (!target) return null;
     const inverse = new Map();
     for (const [c, v] of stroke.cells) {
@@ -411,6 +451,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #derive() {
     if (!this.#base) return;
     this.#world = deriveWorld(this.#base, this.#edits, this.#overrides, this.#riverEdits);
+    this.#world.sites = this.#sites;
+    this.#world.roads = this.#roads;
     this.#drawPreview();
     this.#updateStats();
   }
@@ -442,16 +484,22 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     ev.preventDefault();
     ev.currentTarget.setPointerCapture(ev.pointerId);
     this.#painting = true;
-    this.#strokeUndo = {
-      channel: this.#tool === "biome" ? "biome" : (RIVER_TOOLS.has(this.#tool) ? "river" : "elev"),
-      cells: new Map()
-    };
+    this.#strokeUndo = { channel: this.#strokeChannel(), cells: new Map() };
     this.#applyBrush(ev);
+  }
+
+  #strokeChannel() {
+    const t = this.#tool;
+    if (t === "biome") return "biome";
+    if (RIVER_TOOLS.has(t)) return "river";
+    if (t === "site") return "site";
+    if (ROUTE_TOOLS.has(t) || t === "roadErase") return "road";
+    return "elev";
   }
 
   #onPaintMove(ev) {
     if (!this.#painting) return;
-    if (RIVER_TOOLS.has(this.#tool)) return; // river tools are click-only
+    if (CLICK_TOOLS.has(this.#tool)) return; // click-only tools never drag
     ev.preventDefault();
     this.#applyBrush(ev);
   }
@@ -475,6 +523,43 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!point) return;
     const { grid } = this.#base;
     const { radius, strength } = this.#brushSettings();
+    if (this.#tool === "site") {
+      const c = this.#world ? cellIndexAt(this.#world, point.x, point.y) : -1;
+      if (c < 0) return;
+      this.#sites ??= new Uint8Array(grid.n);
+      const u = this.#strokeUndo?.cells;
+      if (u && !u.has(c)) u.set(c, this.#sites[c]);
+      this.#sites[c] = this.#brushSite;
+      this.#world.sites = this.#sites;
+      this.#drawPreview();
+      return;
+    }
+    if (ROUTE_TOOLS.has(this.#tool)) {
+      const c = this.#world ? cellIndexAt(this.#world, point.x, point.y) : -1;
+      if (c < 0) return;
+      if (this.#routeAnchor < 0 || this.#routeAnchor === c) {
+        this.#routeAnchor = c;
+        ui.notifications.info(game.i18n.localize("HEXWORLD.RouteAnchorSet"));
+        return;
+      }
+      this.#roads ??= new Uint8Array(grid.n);
+      const kind = this.#tool === "roadMajor" ? 2 : 1;
+      const touched = routeRoad(this.#world, this.#roads, this.#strokeUndo?.cells, this.#routeAnchor, c, kind);
+      if (!touched) ui.notifications.warn(game.i18n.localize("HEXWORLD.RouteUnreachable"));
+      this.#routeAnchor = c;
+      this.#world.roads = this.#roads;
+      this.#drawPreview();
+      return;
+    }
+    if (this.#tool === "roadErase") {
+      this.#roads ??= new Uint8Array(grid.n);
+      applyBiomeBrush(this.#base, this.#roads, this.#strokeUndo?.cells, {
+        biome: 0, radius, x: point.x, y: point.y
+      });
+      if (this.#world) this.#world.roads = this.#roads;
+      this.#drawPreview();
+      return;
+    }
     if (RIVER_TOOLS.has(this.#tool)) {
       if (!this.#world) return;
       this.#riverEdits ??= new Uint8Array(grid.n);
@@ -537,10 +622,15 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         this.#edits = null;
         this.#overrides = null;
         this.#riverEdits = null;
+        this.#sites = null;
+        this.#roads = null;
       }
       this.#undoStack = [];
       this.#redoStack = [];
       this.#derive();
+      // Fresh worlds get their settlements right away; edited scenes keep
+      // theirs (use "Regenerate settlements" to redo them explicitly).
+      if (!this.#editScene && params.settlements > 0) this.#generateSites(params);
       const createBtn = this.element.querySelector("button[data-action=createScene]");
       if (createBtn) createBtn.disabled = false;
       this.#refreshEditbar();
@@ -550,6 +640,27 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     } finally {
       target.disabled = false;
     }
+  }
+
+  /** Bake procedural settlements/POIs/roads into the editable channels. */
+  #generateSites(params) {
+    if (!this.#world) return;
+    const rng = makeRng(params.seed + ":sites");
+    const { sites, roads } = generateSettlements(this.#world, rng, params.settlements ?? 0.5);
+    this.#sites = sites;
+    this.#roads = roads;
+    this.#world.sites = sites;
+    this.#world.roads = roads;
+    // Wholesale replacement is not stroke-undoable: drop stale history.
+    this.#undoStack = [];
+    this.#redoStack = [];
+    this.#drawPreview();
+    this.#refreshEditbar();
+  }
+
+  static #onRegenSites(_event, _target) {
+    if (!this.#world) return;
+    this.#generateSites(this.#readParams());
   }
 
   static #onUndoEdit(_event, _target) {
@@ -575,6 +686,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#edits = null;
     this.#overrides = null;
     this.#riverEdits = null;
+    this.#sites = null;
+    this.#roads = null;
     this.#undoStack = [];
     this.#redoStack = [];
     this.#derive();
@@ -592,6 +705,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         "flags.hexworld.edits": encodeEdits(this.#edits),
         "flags.hexworld.biomes": encodeOverrides(this.#overrides),
         "flags.hexworld.rivers": encodeBytes(this.#riverEdits),
+        "flags.hexworld.sites": encodeBytes(this.#sites),
+        "flags.hexworld.roads": encodeBytes(this.#roads),
         "flags.hexworld.stats": this.#world.stats
       });
       ui.notifications.info(game.i18n.format("HEXWORLD.NotifySceneUpdated", { name: this.#editScene.name }));

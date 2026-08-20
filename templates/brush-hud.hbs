@@ -28,6 +28,13 @@
     <button type="button" class="hw-swatch hw-swatch-erase{{#if eraserActive}} active{{/if}}" data-biome="255"
             data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}"><i class="fa-solid fa-eraser"></i></button>
   </div>
+  <div class="hw-hud-subtitle">{{localize "HEXWORLD.SitesTitle"}}</div>
+  <div class="hw-palette">
+    {{#each siteTypes}}
+    <button type="button" class="hw-swatch hw-site-swatch{{#if active}} active{{/if}}" data-site="{{id}}"
+            data-tooltip="{{label}}"><i class="{{icon}}"></i></button>
+    {{/each}}
+  </div>
   <button type="button" class="hw-sea-btn"><i class="fa-solid fa-arrow-up-from-water-pump"></i> {{localize "HEXWORLD.SeaLevel"}}</button>
   <div class="hw-hud-info"></div>
 </div>

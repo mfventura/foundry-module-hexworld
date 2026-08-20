@@ -249,6 +249,13 @@
   opacity: 0.55;
 }
 
+.hexworld-app .hw-palette-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--color-border-light-2, #7a7971);
+}
+
 #hexworld-brush-hud .hw-swatch,
 .hexworld-app .hw-swatch {
   width: 22px;
@@ -268,7 +275,9 @@
 }
 
 #hexworld-brush-hud .hw-swatch-erase,
-.hexworld-app .hw-swatch-erase {
+.hexworld-app .hw-swatch-erase,
+#hexworld-brush-hud .hw-site-swatch,
+.hexworld-app .hw-site-swatch {
   background: rgba(0, 0, 0, 0.35);
   color: #ddd;
   font-size: 11px;

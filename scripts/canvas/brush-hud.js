@@ -5,8 +5,18 @@
  */
 
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
+import { SITE } from "../generator/sites.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
+
+export const SITE_TYPES = [
+  { id: SITE.VILLAGE, icon: "fa-solid fa-house", key: "SiteVillage" },
+  { id: SITE.CITY, icon: "fa-solid fa-city", key: "SiteCity" },
+  { id: SITE.DUNGEON, icon: "fa-solid fa-dungeon", key: "SiteDungeon" },
+  { id: SITE.TEMPLE, icon: "fa-solid fa-place-of-worship", key: "SiteTemple" },
+  { id: SITE.RUIN, icon: "fa-solid fa-archway", key: "SiteRuin" },
+  { id: SITE.NONE, icon: "fa-solid fa-eraser", key: "SiteErase" }
+];
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -41,7 +51,12 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       strength: this.layer.brush.strength,
       viewMode: this.layer.viewMode,
       swatches,
-      eraserActive: this.layer.brush.biome === NO_OVERRIDE
+      eraserActive: this.layer.brush.biome === NO_OVERRIDE,
+      siteTypes: SITE_TYPES.map(t => ({
+        ...t,
+        label: game.i18n.localize(`HEXWORLD.${t.key}`),
+        active: this.layer.brush.site === t.id
+      }))
     };
   }
 
@@ -57,14 +72,24 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       sync();
     }
 
-    for (const btn of this.element.querySelectorAll(".hw-swatch")) {
+    for (const btn of this.element.querySelectorAll(".hw-swatch[data-biome]")) {
       btn.addEventListener("click", () => {
         this.layer.brush.biome = Number(btn.dataset.biome);
-        for (const b of this.element.querySelectorAll(".hw-swatch")) {
+        for (const b of this.element.querySelectorAll(".hw-swatch[data-biome]")) {
           b.classList.toggle("active", b === btn);
         }
         // Picking a color is an intent to paint biomes: switch to the tool.
         ui.controls.activate({ tool: "biome" });
+      });
+    }
+
+    for (const btn of this.element.querySelectorAll(".hw-site-swatch")) {
+      btn.addEventListener("click", () => {
+        this.layer.brush.site = Number(btn.dataset.site);
+        for (const b of this.element.querySelectorAll(".hw-site-swatch")) {
+          b.classList.toggle("active", b === btn);
+        }
+        ui.controls.activate({ tool: "site" });
       });
     }
 

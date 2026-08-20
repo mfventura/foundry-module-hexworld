@@ -34,9 +34,13 @@ Límite: `MAX_CELLS = 25000`. Tamaño de imagen final capado a 13000 px de lado 
 
 ## Pruebas
 
-No hay framework de tests. Los smoke tests del pipeline viven en `scratchpad/` (no se empaqueta en el zip): `smoke-brush.mjs` (pinceles de elevación), `smoke-biomes.mjs` (overrides), `smoke-rivers.mjs` (ríos manuales), `smoke-algo2.mjs` (compatibilidad algo 1 vs algo 2). Todos definen mocks de `globalThis.CONST` y `globalThis.foundry.grid` e importan el generador. Ejecutar `node scratchpad/smoke-*.mjs` si se toca el generador. `scratchpad/viz.mjs` renderiza BMPs por plantilla y algo (convertir con `sips -s format png` para inspección visual).
+No hay framework de tests. Los smoke tests del pipeline viven en `scratchpad/` (no se empaqueta en el zip): `smoke-brush.mjs` (pinceles de elevación), `smoke-biomes.mjs` (overrides), `smoke-rivers.mjs` (ríos manuales), `smoke-algo2.mjs` (compatibilidad algo 1 vs algo 2), `smoke-sites.mjs` (asentamientos/carreteras: conectividad, PDI remotos, ruta manual). Todos definen mocks de `globalThis.CONST` y `globalThis.foundry.grid` e importan el generador. Ejecutar `node scratchpad/smoke-*.mjs` si se toca el generador. `scratchpad/viz.mjs` renderiza BMPs por plantilla y algo (convertir con `sips -s format png` para inspección visual).
 
 Chequeo de sintaxis: `node --input-type=module --check < archivo.js`.
+
+## Asentamientos, PDI y caminos (v0.8.0)
+
+`generator/sites.js`. A diferencia del terreno, NO se re-derivan: la generación (stream `seed+":sites"`, slider `params.settlements` 0..1) se ejecuta una vez y se hornea en dos canales editables — `flags.hexworld.sites` (u8: 0 nada, 1 pueblo, 2 ciudad, 3 mazmorra, 4 templo, 5 ruinas) y `roads` (u8: 0/1 camino/2 carretera) — para que editar el terreno nunca teletransporte una ciudad. Generación: habitabilidad por celda (tierras bajas templadas + bonus río/costa/lago, vetadas montaña/nieve/glaciar) con espaciado greedy; PDI por lejanía BFS a asentamientos (mazmorras prefieren montaña); carreteras = Dijkstra sobre campo de coste (llanura barata; pendiente, montaña, humedal caros; lago casi impasable; océano ∞) encadenando ciudades, y caminos = un Dijkstra multi-fuente desde la red del que cada pueblo desanda predecesores. `routeRoad` reutiliza el mismo coste para la herramienta manual de dos clicks (origen→destino, encadenable; `clearRouteAnchor` al cambiar de herramienta). Render: segmentos entre celdas de red adyacentes (carretera continua, camino discontinuo — segmento mixto = camino) + marcadores vectoriales, solo en vistas terrain/height. Las celdas de sitios/roads se adjuntan al world tras cada derive (`world.sites/world.roads`) — deriveWorld no las conoce. "Regenerar asentamientos" (editbar) reemplaza ambos canales y vacía undo/redo (no es deshacible por trazo).
 
 ## UX de edición (v0.7.0)
 
@@ -49,4 +53,4 @@ Chequeo de sintaxis: `node --input-type=module --check < archivo.js`.
 
 ## Estado / siguientes fases
 
-v0.1 generación+preview+escena · v0.3 escenas data-driven+edición · v0.4-0.6 pinceles semánticos, biomas, ríos · v0.7 algo v2 (warp, cordilleras, sombra de lluvia) + UX de edición. Pendiente (en orden previsto): nombres procedurales y etiquetas, asentamientos/estados/carreteras.
+v0.1 generación+preview+escena · v0.3 escenas data-driven+edición · v0.4-0.6 pinceles semánticos, biomas, ríos · v0.7 algo v2 (warp, cordilleras, sombra de lluvia) + UX de edición · v0.8 asentamientos, PDI y red de caminos. Pendiente (en orden previsto): nombres procedurales y etiquetas (de asentamientos incluidas), estados/regiones.

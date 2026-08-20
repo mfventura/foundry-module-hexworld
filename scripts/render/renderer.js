@@ -161,6 +161,93 @@ function drawRivers(ctx, world) {
 }
 
 /**
+ * Road network: one segment between every pair of adjacent network cells.
+ * Carreteras are solid, caminos dashed; a mixed segment renders as camino.
+ */
+function drawRoads(ctx, world) {
+  const { grid, roads } = world;
+  if (!roads) return;
+  const size = grid.size;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const kind of [1, 2]) { // draw caminos first, carreteras on top
+    ctx.strokeStyle = kind === 2 ? "rgba(92, 64, 39, 0.95)" : "rgba(112, 84, 56, 0.9)";
+    ctx.lineWidth = size * (kind === 2 ? 0.11 : 0.07);
+    ctx.setLineDash(kind === 2 ? [] : [size * 0.28, size * 0.22]);
+    ctx.beginPath();
+    for (let c = 0; c < grid.n; c++) {
+      if (!roads[c]) continue;
+      for (const nb of grid.neighbors[c]) {
+        if (nb <= c || !roads[nb]) continue;
+        if (Math.min(roads[c], roads[nb]) !== kind) continue;
+        ctx.moveTo(grid.cx[c], grid.cy[c]);
+        ctx.lineTo(grid.cx[nb], grid.cy[nb]);
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+/** Settlement and POI markers, drawn above everything else. */
+function drawSites(ctx, world) {
+  const { grid, sites } = world;
+  if (!sites) return;
+  const s = grid.size;
+  ctx.lineWidth = Math.max(1.5, s * 0.05);
+  for (let c = 0; c < grid.n; c++) {
+    const t = sites[c];
+    if (!t) continue;
+    const x = grid.cx[c], y = grid.cy[c];
+    ctx.strokeStyle = "#2b2118";
+    if (t === 1) { // village: small dot
+      ctx.fillStyle = "#f3e7c8";
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.18, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    } else if (t === 2) { // city: double ring
+      ctx.fillStyle = "#f0cf6d";
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.3, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.14, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (t === 3) { // dungeon: dark inverted triangle
+      ctx.fillStyle = "#33303b";
+      ctx.strokeStyle = "#d9d4c8";
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.24, y - s * 0.18);
+      ctx.lineTo(x + s * 0.24, y - s * 0.18);
+      ctx.lineTo(x, y + s * 0.26);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    } else if (t === 4) { // temple: cross
+      ctx.strokeStyle = "#2b2118";
+      ctx.fillStyle = "#efe9dc";
+      const w = s * 0.09, l = s * 0.28;
+      ctx.beginPath();
+      ctx.rect(x - w, y - l, w * 2, l * 2);
+      ctx.rect(x - l * 0.75, y - l * 0.3, l * 1.5, w * 2);
+      ctx.fill(); ctx.stroke();
+    } else if (t === 5) { // ruin: broken square outline
+      ctx.strokeStyle = "#5d564b";
+      ctx.lineWidth = Math.max(1.5, s * 0.07);
+      const r = s * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(x - r, y - r * 0.2);
+      ctx.lineTo(x - r, y + r);
+      ctx.lineTo(x + r, y + r);
+      ctx.lineTo(x + r, y - r * 0.4);
+      ctx.moveTo(x - r * 0.5, y - r);
+      ctx.lineTo(x + r * 0.3, y - r);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1.5, s * 0.05);
+    }
+  }
+}
+
+/**
  * Coastline: stroke every polygon edge shared between a land cell and a water
  * cell. The neighbor across an edge is found as the one whose center is
  * closest to the edge midpoint — exact enough for regular grids.
@@ -217,6 +304,10 @@ export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   drawCells(ctx, world, mode);
   if (mode === "terrain" || mode === "height") drawRivers(ctx, world);
   drawCoast(ctx, world);
+  if (mode === "terrain" || mode === "height") {
+    drawRoads(ctx, world);
+    drawSites(ctx, world);
+  }
   ctx.restore();
   return canvas;
 }

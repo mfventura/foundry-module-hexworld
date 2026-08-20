@@ -11,16 +11,24 @@
 import { buildBase, deriveWorld } from "../generator/worldgen.js";
 import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.js";
 import { B } from "../generator/biomes.js";
+import { SITE, routeRoad } from "../generator/sites.js";
 import {
   encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes, NO_OVERRIDE
 } from "../lib/codec.js";
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
+import { cellIndexAt } from "../ui/cell-info.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
-const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain", "biome", ...RIVER_TOOLS]);
+const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
+/** Tools that act on a single click instead of dragging an area. */
+const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site"]);
+const PAINT_TOOLS = new Set([
+  "raise", "lower", "smooth", "water", "land", "mountain", "biome",
+  "site", "roadErase", ...RIVER_TOOLS, ...ROUTE_TOOLS
+]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   static get layerOptions() {
@@ -33,8 +41,14 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   overrides = null;
   /** @type {Uint8Array|null} manual river edits (0 = derived) */
   riverEdits = null;
+  /** @type {Uint8Array|null} settlements/POIs per cell (SITE values) */
+  sites = null;
+  /** @type {Uint8Array|null} road network per cell (ROAD values) */
+  roads = null;
   world = null;
-  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND };
+  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE };
+  /** First endpoint of a pending two-click road route. */
+  #routeAnchor = -1;
   /** Current render mode: terrain | height | temp | moist (client-local). */
   viewMode = "terrain";
 
@@ -84,6 +98,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     super._deactivate();
     this.#hud?.close();
     this.#deactivateCursor();
+    this.clearRouteAnchor();
   }
 
   /* -------------------------------------------- */
@@ -108,7 +123,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const tool = this.activeTool;
     if (!this.world || !PAINT_TOOLS.has(tool)) { cur.visible = false; return; }
     const p = ev.getLocalPosition(canvas.stage);
-    const areaTool = !RIVER_TOOLS.has(tool);
+    const areaTool = !CLICK_TOOLS.has(tool);
     const r = areaTool ? this.brush.radius * this.world.grid.size : this.world.grid.size * 0.3;
     cur.clear();
     cur.lineStyle(2, 0xffffff, 0.85);
@@ -133,7 +148,9 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#redoStack = [];
     this.#strokeUndo = null;
     this.#painting = false;
-    this.base = this.edits = this.overrides = this.riverEdits = this.world = null;
+    this.#routeAnchor = -1;
+    this.base = this.edits = this.overrides = this.riverEdits = null;
+    this.sites = this.roads = this.world = null;
   }
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
@@ -149,7 +166,11 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.edits = decodeEdits(f.edits ?? null, this.base.grid.n);
       this.overrides = decodeOverrides(f.biomes ?? null, this.base.grid.n);
       this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
+      this.sites = decodeBytes(f.sites ?? null, this.base.grid.n);
+      this.roads = decodeBytes(f.roads ?? null, this.base.grid.n);
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
+      this.world.sites = this.sites;
+      this.world.roads = this.roads;
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
       // A rebuild while the layer is active (sea-level change, remote edit)
@@ -188,12 +209,24 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     return game.user.isGM && !!this.world && PAINT_TOOLS.has(this.activeTool);
   }
 
+  #strokeChannelFor(tool) {
+    if (tool === "biome") return "biome";
+    if (RIVER_TOOLS.has(tool)) return "river";
+    if (tool === "site") return "site";
+    if (ROUTE_TOOLS.has(tool) || tool === "roadErase") return "road";
+    return "elev";
+  }
+
   #beginStroke() {
-    const tool = this.activeTool;
     this.#strokeUndo = {
-      channel: tool === "biome" ? "biome" : (RIVER_TOOLS.has(tool) ? "river" : "elev"),
+      channel: this.#strokeChannelFor(this.activeTool),
       cells: new Map()
     };
+  }
+
+  /** Abort a pending two-click route (tool change, deactivation). */
+  clearRouteAnchor() {
+    this.#routeAnchor = -1;
   }
 
   _onClickLeft(event) {
@@ -215,7 +248,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   _onDragLeftMove(event) {
     if (!this.#painting) return;
-    if (RIVER_TOOLS.has(this.activeTool)) return; // river tools are click-only
+    if (CLICK_TOOLS.has(this.activeTool)) return; // click-only tools never drag
     const p = event.interactionData?.destination;
     if (p) this.#paintAt(p);
   }
@@ -237,7 +270,33 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const d = canvas.dimensions;
     const x = point.x - d.sceneX;
     const y = point.y - d.sceneY;
-    if (RIVER_TOOLS.has(this.activeTool)) {
+    const tool = this.activeTool;
+    if (tool === "site") {
+      const c = cellIndexAt(this.world, x, y);
+      if (c < 0) return;
+      this.sites ??= new Uint8Array(this.base.grid.n);
+      const u = this.#strokeUndo?.cells;
+      if (u && !u.has(c)) u.set(c, this.sites[c]);
+      this.sites[c] = this.brush.site;
+    } else if (ROUTE_TOOLS.has(tool)) {
+      const c = cellIndexAt(this.world, x, y);
+      if (c < 0) return;
+      if (this.#routeAnchor < 0 || this.#routeAnchor === c) {
+        this.#routeAnchor = c;
+        ui.notifications.info(game.i18n.localize("HEXWORLD.RouteAnchorSet"));
+        return;
+      }
+      this.roads ??= new Uint8Array(this.base.grid.n);
+      const kind = tool === "roadMajor" ? 2 : 1;
+      const touched = routeRoad(this.world, this.roads, this.#strokeUndo?.cells, this.#routeAnchor, c, kind);
+      if (!touched) ui.notifications.warn(game.i18n.localize("HEXWORLD.RouteUnreachable"));
+      this.#routeAnchor = c; // chain: the next click extends the route
+    } else if (tool === "roadErase") {
+      this.roads ??= new Uint8Array(this.base.grid.n);
+      applyBiomeBrush(this.base, this.roads, this.#strokeUndo?.cells, {
+        biome: 0, radius: this.brush.radius, x, y
+      });
+    } else if (RIVER_TOOLS.has(tool)) {
       if (!this.world) return;
       this.riverEdits ??= new Uint8Array(this.base.grid.n);
       applyRiverTool(this.world, this.riverEdits, this.#strokeUndo?.cells, {
@@ -268,6 +327,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   #refresh() {
     if (!this.base) return;
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
+    this.world.sites = this.sites;
+    this.world.roads = this.roads;
     this.#mesh?.draw(this.world, this.viewMode);
   }
 
@@ -299,13 +360,18 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       "flags.hexworld.edits": encodeEdits(this.edits),
       "flags.hexworld.biomes": encodeOverrides(this.overrides),
       "flags.hexworld.rivers": encodeBytes(this.riverEdits),
+      "flags.hexworld.sites": encodeBytes(this.sites),
+      "flags.hexworld.roads": encodeBytes(this.roads),
       "flags.hexworld.stats": this.world.stats
     }, { hexworldLocal: true });
   }
 
   /** Write a stroke's cell values into its channel; returns the inverse stroke. */
   #applyStroke(stroke) {
-    const target = { biome: this.overrides, river: this.riverEdits, elev: this.edits }[stroke.channel];
+    const target = {
+      biome: this.overrides, river: this.riverEdits, elev: this.edits,
+      site: this.sites, road: this.roads
+    }[stroke.channel];
     if (!target) return null;
     const inverse = new Map();
     for (const [c, v] of stroke.cells) {
@@ -338,6 +404,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.edits = null;
     this.overrides = null;
     this.riverEdits = null;
+    this.sites = null;
+    this.roads = null;
     this.#undoStack = [];
     this.#redoStack = [];
     this.#refresh();

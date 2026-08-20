@@ -85,6 +85,13 @@
             <output></output>
           </div>
         </div>
+        <div class="form-group">
+          <label>{{localize "HEXWORLD.Settlements"}}</label>
+          <div class="hw-range">
+            <input type="range" name="settlements" value="{{p.settlements}}" min="0" max="1" step="0.05">
+            <output></output>
+          </div>
+        </div>
       </fieldset>
     </form>
 
@@ -136,6 +143,21 @@
       <button type="button" data-tool="riverRemove" data-tooltip="{{localize 'HEXWORLD.ToolRiverRemove'}}" disabled>
         <i class="fa-solid fa-droplet-slash"></i>
       </button>
+      <button type="button" data-tool="site" data-tooltip="{{localize 'HEXWORLD.ToolSite'}}" disabled>
+        <i class="fa-solid fa-location-dot"></i>
+      </button>
+      <button type="button" data-tool="roadMinor" data-tooltip="{{localize 'HEXWORLD.ToolRoadMinor'}}" disabled>
+        <i class="fa-solid fa-shoe-prints"></i>
+      </button>
+      <button type="button" data-tool="roadMajor" data-tooltip="{{localize 'HEXWORLD.ToolRoadMajor'}}" disabled>
+        <i class="fa-solid fa-road"></i>
+      </button>
+      <button type="button" data-tool="roadErase" data-tooltip="{{localize 'HEXWORLD.ToolRoadErase'}}" disabled>
+        <i class="fa-solid fa-road-circle-xmark"></i>
+      </button>
+      <button type="button" data-action="regenSites" data-tooltip="{{localize 'HEXWORLD.RegenSettlements'}}" disabled>
+        <i class="fa-solid fa-arrows-rotate"></i>
+      </button>
       <label>{{localize "HEXWORLD.BrushRadius"}}</label>
       <input type="range" name="brushRadius" min="1" max="8" step="1" value="3" disabled>
       <label>{{localize "HEXWORLD.BrushStrength"}}</label>
@@ -163,6 +185,11 @@
       {{/each}}
       <button type="button" class="hw-swatch hw-swatch-erase" data-biome="255"
               data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}" disabled><i class="fa-solid fa-eraser"></i></button>
+      <span class="hw-palette-sep"></span>
+      {{#each siteTypes}}
+      <button type="button" class="hw-swatch hw-site-swatch{{#if active}} active{{/if}}" data-site="{{id}}"
+              data-tooltip="{{label}}" disabled><i class="{{icon}}"></i></button>
+      {{/each}}
     </div>
     <div class="hw-canvas-wrap">
       <canvas class="hw-canvas" width="640" height="480"></canvas>
