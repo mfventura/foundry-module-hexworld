@@ -87,8 +87,8 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const b of this.element.querySelectorAll(".hw-swatch[data-biome]")) {
           b.classList.toggle("active", b === btn);
         }
-        // Picking a color is an intent to paint biomes: switch to the tool.
-        ui.controls.activate({ tool: "biome" });
+        // Picking a color is an intent to paint biomes: switch group + tool.
+        ui.controls.activate({ control: "hexworld", tool: "biome" });
       });
     }
 
@@ -98,7 +98,7 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const b of this.element.querySelectorAll(".hw-site-swatch")) {
           b.classList.toggle("active", b === btn);
         }
-        ui.controls.activate({ tool: "site" });
+        ui.controls.activate({ control: "hexworldSites", tool: "site" });
       });
     }
 

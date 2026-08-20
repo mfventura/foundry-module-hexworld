@@ -34,7 +34,13 @@ const PAINT_TOOLS = new Set([
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   static get layerOptions() {
-    return foundry.utils.mergeObject(super.layerOptions, { name: "hexworld" });
+    // Two scene-control groups (terrain / sites) drive this single layer.
+    // Core InteractionLayer#activate syncs SceneControls to the control named
+    // layerOptions.name, which would bounce the user out of the sites group —
+    // so the name follows whichever of OUR controls is currently active.
+    const current = ui.controls?.control?.name;
+    const name = current === "hexworldSites" ? "hexworldSites" : "hexworld";
+    return foundry.utils.mergeObject(super.layerOptions, { name });
   }
 
   base = null;
