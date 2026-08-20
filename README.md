@@ -14,6 +14,7 @@ Módulo de generación procedural de mundos de fantasía totalmente integrado en
   5. Hidrología real: relleno de depresiones (priority-flood), acumulación de flujo, ríos conectados que desembocan en el mar y lagos en cuencas cerradas.
   6. Biomas tipo Whittaker (temperatura × humedad) con montañas, nieves, glaciares, humedales y playas.
 - **Render cartográfico**: sombreado de relieve (hillshade), gradiente de profundidad oceánica, línea de costa y ríos con grosor según caudal.
+- **Edición manual del terreno**: pinceles de elevar, hundir y suavizar directamente sobre la previsualización, con radio y fuerza ajustables, deshacer por trazo y recálculo en vivo de ríos, lagos y biomas. Las ediciones se guardan (comprimidas) en las flags de la escena.
 - **Creación de escena en un clic**: sube la imagen (webp) a `worlds/<mundo>/hexworld/` y crea la escena con rejilla, distancia y unidades configuradas.
 
 ## Instalación
@@ -75,8 +76,9 @@ Foundry VTT **v14** (mínimo v13). Sin dependencias ni build step (ESM puro). El
 
 ## Hoja de ruta
 
+- [x] Edición manual del terreno (elevar/hundir/suavizar) antes de crear la escena.
 - [ ] Nombres procedurales (mares, cordilleras, regiones) con etiquetas como Drawings/Notes.
 - [ ] Asentamientos, estados y carreteras.
-- [ ] Edición manual del terreno (pincel de altura/bioma) antes de crear la escena.
-- [ ] Exportar/importar datos del mundo; regenerar escena desde flags.
+- [ ] Pincel de bioma y de agua (forzar lago/mar).
+- [ ] Exportar/importar datos del mundo; regenerar escena desde flags (las flags ya guardan params + edits).
 - [ ] Capas: precipitación, temperatura, altura (modo de vista de depuración).

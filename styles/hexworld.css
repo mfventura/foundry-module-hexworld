@@ -95,7 +95,47 @@
   min-width: 0;
 }
 
+.hexworld-app .hw-editbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 1px solid var(--color-border-light-2, #7a7971);
+  border-radius: 6px;
+  font-size: var(--font-size-12, 12px);
+}
+
+.hexworld-app .hw-editbar.disabled {
+  opacity: 0.55;
+}
+
+.hexworld-app .hw-editbar-label {
+  font-weight: bold;
+  margin-right: 2px;
+}
+
+.hexworld-app .hw-editbar button {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 26px;
+  line-height: 1;
+  padding: 0;
+}
+
+.hexworld-app .hw-editbar button.active {
+  outline: 2px solid var(--color-shadow-primary, #ff6400);
+  border-radius: 4px;
+}
+
+.hexworld-app .hw-editbar input[type=range] {
+  flex: 1;
+  min-width: 40px;
+}
+
 .hexworld-app .hw-canvas {
+  cursor: crosshair;
+  touch-action: none;
   max-width: 100%;
   border: 1px solid var(--color-border-dark-3, #444);
   border-radius: 4px;

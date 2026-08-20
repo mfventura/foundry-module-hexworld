@@ -4,8 +4,8 @@
  */
 
 import { HexWorldGeneratorApp } from "./ui/generator-app.js";
-import { generateWorld } from "./generator/worldgen.js";
-import { createSceneFromWorld } from "./scene/scene-builder.js";
+import { generateWorld, buildBase, deriveWorld } from "./generator/worldgen.js";
+import { createSceneFromWorld, encodeEdits, decodeEdits } from "./scene/scene-builder.js";
 import { renderWorld } from "./render/renderer.js";
 
 Hooks.once("init", () => {
@@ -22,7 +22,11 @@ Hooks.once("ready", () => {
   module.api = {
     open: () => HexWorldGeneratorApp.open(),
     generateWorld,
+    buildBase,
+    deriveWorld,
     createSceneFromWorld,
+    encodeEdits,
+    decodeEdits,
     renderWorld
   };
 });

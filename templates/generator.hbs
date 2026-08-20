@@ -99,6 +99,28 @@
   </section>
 
   <section class="hw-preview">
+    <div class="hw-editbar disabled">
+      <span class="hw-editbar-label">{{localize "HEXWORLD.EditTools"}}</span>
+      <button type="button" data-tool="raise" data-tooltip="{{localize 'HEXWORLD.ToolRaise'}}" disabled>
+        <i class="fa-solid fa-arrow-up-from-ground-water"></i>
+      </button>
+      <button type="button" data-tool="lower" data-tooltip="{{localize 'HEXWORLD.ToolLower'}}" disabled>
+        <i class="fa-solid fa-arrow-down"></i>
+      </button>
+      <button type="button" data-tool="smooth" data-tooltip="{{localize 'HEXWORLD.ToolSmooth'}}" disabled>
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+      </button>
+      <label>{{localize "HEXWORLD.BrushRadius"}}</label>
+      <input type="range" name="brushRadius" min="1" max="8" step="1" value="3" disabled>
+      <label>{{localize "HEXWORLD.BrushStrength"}}</label>
+      <input type="range" name="brushStrength" min="0.02" max="0.15" step="0.01" value="0.06" disabled>
+      <button type="button" data-action="undoEdit" data-tooltip="{{localize 'HEXWORLD.Undo'}}" disabled>
+        <i class="fa-solid fa-rotate-left"></i>
+      </button>
+      <button type="button" data-action="resetEdits" data-tooltip="{{localize 'HEXWORLD.ResetEdits'}}" disabled>
+        <i class="fa-solid fa-eraser"></i>
+      </button>
+    </div>
     <canvas class="hw-canvas" width="640" height="480"></canvas>
     <div class="hw-stats">{{localize "HEXWORLD.NoWorld"}}</div>
   </section>

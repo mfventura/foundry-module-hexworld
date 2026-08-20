@@ -27,6 +27,16 @@ export const MAX_CELLS = 25000;
  * @param {number} params.riverDensity 0..1
  */
 export function generateWorld(params) {
+  return deriveWorld(buildBase(params), null);
+}
+
+/**
+ * The immutable part of a world: grid, procedural heightmap and sea level.
+ * Manual terrain edits are applied on top of this without regenerating it,
+ * and the sea level stays frozen so painting land never shifts the coastline
+ * elsewhere on the map.
+ */
+export function buildBase(params) {
   const n = params.cols * params.rows;
   if (n > MAX_CELLS) {
     throw new Error(`HexWorld: too many cells (${n} > ${MAX_CELLS})`);
@@ -41,15 +51,31 @@ export function generateWorld(params) {
 
   // Independent RNG streams per stage so tweaking one slider (e.g. moisture)
   // never reshuffles unrelated stages of the same seed.
-  const rngElev = makeRng(params.seed + ":elev");
-  const rngMoist = makeRng(params.seed + ":moist");
+  const elevBase = buildHeightmap(grid, makeRng(params.seed + ":elev"), params.template);
+  const sea = seaLevelFor(elevBase, params.waterFraction);
+  return { params, grid, elevBase, sea };
+}
 
-  const elev = buildHeightmap(grid, rngElev, params.template);
-  const sea = seaLevelFor(elev, params.waterFraction);
+/**
+ * Derive the full world (hydrology, climate, biomes) from a base plus an
+ * optional per-cell elevation delta painted by the user.
+ * @param {object} base result of buildBase()
+ * @param {Float32Array|null} edits elevation deltas, same length as cells
+ */
+export function deriveWorld(base, edits) {
+  const { params, grid, elevBase, sea } = base;
+
+  let elev = elevBase;
+  if (edits) {
+    elev = new Float32Array(grid.n);
+    for (let c = 0; c < grid.n; c++) {
+      elev[c] = Math.min(1, Math.max(0, elevBase[c] + edits[c]));
+    }
+  }
 
   const { isOcean, isLake, isWater, filled } = computeHydrology(grid, elev, sea);
   const temp = computeTemperature(grid, elev, sea, params.climate);
-  const moist = computeMoisture(grid, rngMoist, isWater, params.moisture);
+  const moist = computeMoisture(grid, makeRng(params.seed + ":moist"), isWater, params.moisture);
   const { flowTo, flux } = computeFlux(grid, filled, isOcean, isLake, moist);
   const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity);
 
@@ -57,7 +83,8 @@ export function generateWorld(params) {
     params, grid, elev, sea, filled,
     isOcean, isLake, isWater,
     temp, moist, flowTo, flux, isRiver,
-    riverThreshold: threshold
+    riverThreshold: threshold,
+    base, edits
   };
   world.biome = assignBiomes(world);
   world.stats = computeStats(world);

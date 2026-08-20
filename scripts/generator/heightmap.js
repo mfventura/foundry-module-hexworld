@@ -7,11 +7,19 @@
 
 import { Simplex2, fbm, ridged } from "../lib/noise.js";
 
+/**
+ * Template tuning notes:
+ *  - `falloffDrop` must stay small for anything that is not a pangea — the sea
+ *    level is a quantile, so an aggressive border drop eats the whole water
+ *    budget and every template collapses into one central landmass.
+ *  - `water` is the default water fraction the UI adopts when the template is
+ *    selected; the shape of each template only reads correctly near it.
+ */
 export const TEMPLATES = {
-  continents:  { freq: 1.8, octaves: 5, ridge: 0.35, ridgeFreq: 3.2, falloff: 0.16, centerBoost: 0 },
-  pangea:      { freq: 1.1, octaves: 5, ridge: 0.40, ridgeFreq: 2.6, falloff: 0.28, centerBoost: 0.30 },
-  archipelago: { freq: 3.0, octaves: 5, ridge: 0.28, ridgeFreq: 5.0, falloff: 0.22, centerBoost: 0 },
-  islands:     { freq: 4.2, octaves: 4, ridge: 0.22, ridgeFreq: 6.5, falloff: 0.28, centerBoost: 0 }
+  continents:  { freq: 1.3, octaves: 5, ridge: 0.35, ridgeFreq: 3.2, falloff: 0.14, falloffDrop: 0.14, centerBoost: 0, water: 0.58 },
+  pangea:      { freq: 1.2, octaves: 5, ridge: 0.40, ridgeFreq: 2.6, falloff: 0.30, falloffDrop: 0.35, centerBoost: 0.35, water: 0.5 },
+  archipelago: { freq: 3.4, octaves: 5, ridge: 0.28, ridgeFreq: 5.0, falloff: 0.14, falloffDrop: 0.10, centerBoost: 0, water: 0.68 },
+  islands:     { freq: 5.0, octaves: 4, ridge: 0.22, ridgeFreq: 7.0, falloff: 0.14, falloffDrop: 0.10, centerBoost: 0, water: 0.78 }
 };
 
 function smoothstep(t) { return t * t * (3 - 2 * t); }
@@ -31,7 +39,6 @@ export function buildHeightmap(grid, rng, templateKey) {
   const W = grid.pixelWidth, H = grid.pixelHeight;
   const maxDim = Math.max(W, H);
 
-  let min = Infinity, max = -Infinity;
   for (let c = 0; c < n; c++) {
     const nx = grid.cx[c] / maxDim;
     const ny = grid.cy[c] / maxDim;
@@ -47,20 +54,32 @@ export function buildHeightmap(grid, rng, templateKey) {
       v += cfg.centerBoost * Math.max(0, 1 - d);
     }
 
-    // Edge falloff: push elevation down near the map border so oceans frame the land.
+    // Edge falloff: bias the map border toward water without flattening it —
+    // the noise must keep control of the interior shapes.
     const px = grid.cx[c] / W, py = grid.cy[c] / H;
     const edge = Math.min(px, 1 - px, py, 1 - py); // 0 at border, 0.5 at center
     const t = smoothstep(Math.min(1, Math.max(0, edge / cfg.falloff)));
-    v = v * t - (1 - t) * 0.4;
+    v = v * (0.6 + 0.4 * t) - (1 - t) * cfg.falloffDrop;
 
     elev[c] = v;
+  }
+
+  // One light smoothing pass: removes single-cell speckle (tiny lakes/islets)
+  // and cleans up coastlines without erasing the large-scale shapes.
+  const smoothed = new Float32Array(n);
+  let min = Infinity, max = -Infinity;
+  for (let c = 0; c < n; c++) {
+    let sum = 0, count = 0;
+    for (const nb of grid.neighbors[c]) { sum += elev[nb]; count++; }
+    const v = count ? 0.65 * elev[c] + 0.35 * (sum / count) : elev[c];
+    smoothed[c] = v;
     if (v < min) min = v;
     if (v > max) max = v;
   }
 
   const range = max - min || 1;
-  for (let c = 0; c < n; c++) elev[c] = (elev[c] - min) / range;
-  return elev;
+  for (let c = 0; c < n; c++) smoothed[c] = (smoothed[c] - min) / range;
+  return smoothed;
 }
 
 /** Sea level such that ~waterFraction of cells are below it. */

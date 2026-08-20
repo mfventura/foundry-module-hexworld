@@ -13,7 +13,11 @@ Módulo de Foundry VTT (**objetivo: v14**, mínimo v13) de generación procedura
 
 ## Pipeline (generator/worldgen.js)
 
-heightmap (fBm+ridged+falloff por plantilla) → nivel del mar por cuantil del slider de agua → océano por flood-fill desde el borde → priority-flood (relleno de depresiones, lagos) → temperatura (latitud+altitud, °C) → humedad (ruido+BFS a agua) → flujo acumulado sobre la superficie rellenada (ríos = cuantil de flujo, conectados por construcción) → biomas (tabla Whittaker + montaña/nieve/humedal/playa).
+Dividido en `buildBase(params)` (grid + heightmap + nivel del mar) y `deriveWorld(base, edits)` (resto). heightmap (fBm+ridged+falloff por plantilla, 1 pasada de suavizado) → nivel del mar por cuantil del slider de agua → océano por flood-fill desde el borde; masas encerradas bajo el mar ≥1.5% de celdas = mares interiores (isOcean), menores = lagos → priority-flood (relleno de depresiones; pits > 0.02 = lagos) → temperatura (latitud+altitud, °C) → humedad (ruido+BFS a agua) → flujo acumulado sobre la superficie rellenada (ríos = cuantil de flujo, conectados por construcción) → biomas (tabla Whittaker + montaña/nieve/humedal/playa).
+
+**Edición de terreno**: `edits` es un Float32Array de deltas de elevación sobre `elevBase`; el nivel del mar queda congelado al de la base (pintar no desplaza costas ajenas). La UI pinta con pointer events sobre el canvas de previsualización; el pincel selecciona celdas por distancia euclídea a los centros (no hace falta mapear píxel→celda exacto), re-derivando en vivo con throttle (60ms, 220ms en mapas >10k celdas). Las ediciones se guardan en flags como Int8 (delta×100) en base64 (`encodeEdits`/`decodeEdits` en scene-builder.js).
+
+**Plantillas** (heightmap.js): cada una lleva su `water` por defecto que la UI adopta al cambiar de plantilla. El `falloffDrop` debe mantenerse bajo salvo en pangea: como el mar es un cuantil, un falloff agresivo consume todo el presupuesto de agua y toda plantilla colapsa en una única masa central (bug corregido en v0.2.0 — verificado visualmente con scratchpad/viz.mjs, que renderiza BMPs por plantilla).
 
 Límite: `MAX_CELLS = 25000`. Tamaño de imagen final capado a 13000 px de lado (Foundry estira el fondo a las dimensiones de la escena, la alineación se mantiene).
 

@@ -27,6 +27,44 @@ async function ensureDirectory(path) {
   }
 }
 
+/**
+ * Quantize the painted elevation deltas (±1.27 in steps of 0.01) to Int8 and
+ * encode as base64, so edited worlds remain reproducible from scene flags
+ * without storing 100KB float arrays.
+ * @returns {string|null} null when there are no effective edits
+ */
+export function encodeEdits(edits) {
+  if (!edits) return null;
+  const bytes = new Uint8Array(edits.length);
+  let any = false;
+  for (let i = 0; i < edits.length; i++) {
+    const q = Math.max(-127, Math.min(127, Math.round(edits[i] * 100)));
+    if (q !== 0) any = true;
+    bytes[i] = q & 0xFF;
+  }
+  if (!any) return null;
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/** @returns {Float32Array|null} inverse of encodeEdits */
+export function decodeEdits(encoded, length) {
+  if (!encoded) return null;
+  const binary = atob(encoded);
+  if (binary.length !== length) return null;
+  const edits = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    let q = binary.charCodeAt(i);
+    if (q > 127) q -= 256;
+    edits[i] = q / 100;
+  }
+  return edits;
+}
+
 function slugify(str) {
   return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "world";
 }
@@ -71,6 +109,8 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         version: 1,
         seed: world.params.seed,
         params: world.params,
+        edits: encodeEdits(world.edits),
+        editsFormat: "int8x100",
         stats: world.stats
       }
     }

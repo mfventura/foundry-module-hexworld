@@ -85,10 +85,25 @@ export function computeHydrology(grid, elev, sea) {
     }
   }
 
-  // --- Lakes: enclosed below-sea water, or land pits filled noticeably above terrain ---
+  // --- Enclosed below-sea water: large connected bodies are inland seas
+  // (they behave as ocean for climate, biomes and rendering); small ones are
+  // lakes. Land pits filled noticeably above terrain are lakes too. ---
+  const seaBodyMin = Math.max(24, Math.round(n * 0.015));
+  const seen = new Uint8Array(n);
   for (let c = 0; c < n; c++) {
-    if (isOcean[c]) continue;
-    if (elev[c] < sea || filled[c] - elev[c] > 0.012) isLake[c] = 1;
+    if (seen[c] || isOcean[c] || elev[c] >= sea) continue;
+    const body = [c];
+    seen[c] = 1;
+    for (let q = 0; q < body.length; q++) {
+      for (const nb of grid.neighbors[body[q]]) {
+        if (!seen[nb] && !isOcean[nb] && elev[nb] < sea) { seen[nb] = 1; body.push(nb); }
+      }
+    }
+    const target = body.length >= seaBodyMin ? isOcean : isLake;
+    for (const cell of body) target[cell] = 1;
+  }
+  for (let c = 0; c < n; c++) {
+    if (!isOcean[c] && !isLake[c] && filled[c] - elev[c] > 0.02) isLake[c] = 1;
   }
 
   const isWater = new Uint8Array(n);

@@ -1,10 +1,13 @@
 /**
  * HexWorld generator window (ApplicationV2). Left: parameters. Right: live
- * preview + stats. Generation is deterministic from the seed; "Create scene"
- * renders the current world at full resolution and builds the Scene.
+ * preview + terrain-editing toolbar + stats. Generation is deterministic from
+ * the seed; manual edits are stored as an elevation delta layer on top of the
+ * procedural base, and the downstream pipeline (hydrology, climate, biomes)
+ * is re-derived as you paint.
  */
 
-import { generateWorld, MAX_CELLS } from "../generator/worldgen.js";
+import { buildBase, deriveWorld, MAX_CELLS } from "../generator/worldgen.js";
+import { TEMPLATES } from "../generator/heightmap.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString } from "../lib/random.js";
@@ -19,13 +22,15 @@ const DEFAULT_PARAMS = {
   cols: 64,
   rows: 48,
   cellSize: 100,
-  waterFraction: 0.55,
+  waterFraction: 0.58,
   climate: "temperate",
   moisture: 1.0,
   riverDensity: 0.5,
   distance: 10,
   units: "km"
 };
+
+const UNDO_LIMIT = 20;
 
 export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static #instance = null;
@@ -36,7 +41,21 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     return this.#instance;
   }
 
+  /** @type {object|null} result of buildBase() */
+  #base = null;
+  /** @type {Float32Array|null} painted elevation deltas */
+  #edits = null;
+  /** @type {object|null} derived world currently shown in the preview */
   #world = null;
+  #lastScale = 1;
+
+  #tool = "raise";
+  #painting = false;
+  /** @type {Map<number, number>|null} cell -> previous delta, for the active stroke */
+  #strokeUndo = null;
+  /** @type {Map<number, number>[]} */
+  #undoStack = [];
+  #lastDerive = 0;
 
   static DEFAULT_OPTIONS = {
     id: "hexworld-generator",
@@ -50,7 +69,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     actions: {
       randomSeed: HexWorldGeneratorApp.#onRandomSeed,
       generate: HexWorldGeneratorApp.#onGenerate,
-      createScene: HexWorldGeneratorApp.#onCreateScene
+      createScene: HexWorldGeneratorApp.#onCreateScene,
+      undoEdit: HexWorldGeneratorApp.#onUndoEdit,
+      resetEdits: HexWorldGeneratorApp.#onResetEdits
     }
   };
 
@@ -93,22 +114,52 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const root = this.element;
     // The template's <form> is only a field container — never navigate.
     root.querySelector("form.hw-form")?.addEventListener("submit", ev => ev.preventDefault());
+
     // Live value labels for range sliders.
     for (const range of root.querySelectorAll("input[type=range]")) {
       const output = range.closest(".hw-range")?.querySelector("output");
-      const sync = () => { if (output) output.textContent = this.#formatRange(range); };
+      const sync = () => { if (output) output.textContent = `${Math.round(Number(range.value) * 100)}%`; };
       range.addEventListener("input", sync);
       sync();
     }
-    // Redraw the preview if a world already exists (e.g. after a re-render).
-    if (this.#world) this.#drawPreview();
+
+    // Each template has a water fraction it was tuned for — adopt it on change.
+    const tplSelect = root.querySelector("select[name=template]");
+    tplSelect?.addEventListener("change", () => {
+      const water = TEMPLATES[tplSelect.value]?.water;
+      if (water == null) return;
+      const range = root.querySelector("input[name=waterFraction]");
+      if (!range) return;
+      range.value = String(water);
+      range.dispatchEvent(new Event("input"));
+    });
+
+    // Terrain editing: tool selection and paint events on the preview canvas.
+    for (const btn of root.querySelectorAll(".hw-editbar [data-tool]")) {
+      btn.addEventListener("click", () => {
+        this.#tool = btn.dataset.tool;
+        this.#refreshToolButtons();
+      });
+    }
+    const canvas = root.querySelector("canvas.hw-canvas");
+    if (canvas) {
+      canvas.addEventListener("pointerdown", ev => this.#onPaintStart(ev));
+      canvas.addEventListener("pointermove", ev => this.#onPaintMove(ev));
+      canvas.addEventListener("pointerup", ev => this.#onPaintEnd(ev));
+      canvas.addEventListener("pointercancel", ev => this.#onPaintEnd(ev));
+    }
+
+    this.#refreshToolButtons();
+    this.#refreshEditbar();
+    if (this.#world) {
+      this.#drawPreview();
+      this.#updateStats();
+    }
   }
 
-  #formatRange(range) {
-    const v = Number(range.value);
-    if (range.name === "waterFraction") return `${Math.round(v * 100)}%`;
-    return `${Math.round(v * 100)}%`;
-  }
+  /* -------------------------------------------- */
+  /*  Parameters                                   */
+  /* -------------------------------------------- */
 
   #readParams() {
     const form = this.element.querySelector("form.hw-form");
@@ -131,13 +182,17 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     };
   }
 
+  /* -------------------------------------------- */
+  /*  Preview and stats                            */
+  /* -------------------------------------------- */
+
   #drawPreview() {
     const canvas = this.element.querySelector("canvas.hw-canvas");
     if (!canvas || !this.#world) return;
     const box = this.element.querySelector(".hw-preview");
     const maxW = Math.max(300, (box?.clientWidth ?? 640) - 8);
-    const scale = previewScale(this.#world, maxW, 560);
-    renderWorld(this.#world, canvas, scale);
+    this.#lastScale = previewScale(this.#world, maxW, 540);
+    renderWorld(this.#world, canvas, this.#lastScale);
   }
 
   #updateStats() {
@@ -155,6 +210,122 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       lakes: s.lakeCells
     });
   }
+
+  #refreshToolButtons() {
+    for (const btn of this.element.querySelectorAll(".hw-editbar [data-tool]")) {
+      btn.classList.toggle("active", btn.dataset.tool === this.#tool);
+    }
+  }
+
+  #refreshEditbar() {
+    const bar = this.element.querySelector(".hw-editbar");
+    if (!bar) return;
+    const ready = !!this.#base;
+    bar.classList.toggle("disabled", !ready);
+    for (const el of bar.querySelectorAll("button, input")) el.disabled = !ready;
+    const undoBtn = bar.querySelector("button[data-action=undoEdit]");
+    if (undoBtn) undoBtn.disabled = !ready || !this.#undoStack.length;
+  }
+
+  #derive() {
+    if (!this.#base) return;
+    this.#world = deriveWorld(this.#base, this.#edits);
+    this.#drawPreview();
+    this.#updateStats();
+  }
+
+  /* -------------------------------------------- */
+  /*  Terrain painting                             */
+  /* -------------------------------------------- */
+
+  /** Canvas event -> world pixel coordinates (undo CSS scaling + preview scale). */
+  #canvasPoint(ev) {
+    const canvas = ev.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return {
+      x: (ev.clientX - rect.left) * (canvas.width / rect.width) / this.#lastScale,
+      y: (ev.clientY - rect.top) * (canvas.height / rect.height) / this.#lastScale
+    };
+  }
+
+  #brushSettings() {
+    const bar = this.element.querySelector(".hw-editbar");
+    const radius = Number(bar?.querySelector("input[name=brushRadius]")?.value ?? 3);
+    const strength = Number(bar?.querySelector("input[name=brushStrength]")?.value ?? 0.06);
+    return { radius, strength };
+  }
+
+  #onPaintStart(ev) {
+    if (!this.#base || ev.button !== 0) return;
+    ev.preventDefault();
+    ev.currentTarget.setPointerCapture(ev.pointerId);
+    this.#painting = true;
+    this.#strokeUndo = new Map();
+    this.#applyBrush(ev);
+  }
+
+  #onPaintMove(ev) {
+    if (!this.#painting) return;
+    ev.preventDefault();
+    this.#applyBrush(ev);
+  }
+
+  #onPaintEnd(ev) {
+    if (!this.#painting) return;
+    this.#painting = false;
+    try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_err) { /* already released */ }
+    if (this.#strokeUndo?.size) {
+      this.#undoStack.push(this.#strokeUndo);
+      if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
+    }
+    this.#strokeUndo = null;
+    this.#derive();
+    this.#refreshEditbar();
+  }
+
+  #applyBrush(ev) {
+    const point = this.#canvasPoint(ev);
+    if (!point) return;
+    const { grid, elevBase } = this.#base;
+    this.#edits ??= new Float32Array(grid.n);
+    const { radius, strength } = this.#brushSettings();
+    const radiusPx = radius * grid.size;
+    const r2 = radiusPx * radiusPx;
+    const edits = this.#edits;
+
+    for (let c = 0; c < grid.n; c++) {
+      const dx = grid.cx[c] - point.x;
+      const dy = grid.cy[c] - point.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const falloff = (1 - Math.sqrt(d2) / radiusPx) ** 2;
+      if (!this.#strokeUndo.has(c)) this.#strokeUndo.set(c, edits[c]);
+
+      if (this.#tool === "raise") edits[c] += strength * falloff;
+      else if (this.#tool === "lower") edits[c] -= strength * falloff;
+      else if (this.#tool === "smooth") {
+        const nbs = grid.neighbors[c];
+        if (!nbs.length) continue;
+        let sum = 0;
+        for (const nb of nbs) sum += Math.min(1, Math.max(0, elevBase[nb] + edits[nb]));
+        const current = Math.min(1, Math.max(0, elevBase[c] + edits[c]));
+        edits[c] += (sum / nbs.length - current) * Math.min(1, strength * 8) * falloff;
+      }
+    }
+
+    // Live feedback, throttled harder on big maps where a derive is costlier.
+    const now = performance.now();
+    const interval = grid.n > 10000 ? 220 : 60;
+    if (now - this.#lastDerive >= interval) {
+      this.#lastDerive = now;
+      this.#derive();
+    }
+  }
+
+  /* -------------------------------------------- */
+  /*  Actions                                      */
+  /* -------------------------------------------- */
 
   static #onRandomSeed(_event, _target) {
     const input = this.element.querySelector("input[name=seed]");
@@ -180,17 +351,35 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       await game.settings.set("hexworld", "lastParams", params);
       // Let the disabled state paint before the synchronous generation work.
       await new Promise(r => setTimeout(r, 20));
-      this.#world = generateWorld(params);
-      this.#drawPreview();
-      this.#updateStats();
+      this.#base = buildBase(params);
+      this.#edits = null;
+      this.#undoStack = [];
+      this.#derive();
       const createBtn = this.element.querySelector("button[data-action=createScene]");
       if (createBtn) createBtn.disabled = false;
+      this.#refreshEditbar();
     } catch (err) {
       console.error(err);
       ui.notifications.error(game.i18n.localize("HEXWORLD.ErrGenerate"));
     } finally {
       target.disabled = false;
     }
+  }
+
+  static #onUndoEdit(_event, _target) {
+    const stroke = this.#undoStack.pop();
+    if (!stroke || !this.#edits) return;
+    for (const [c, prev] of stroke) this.#edits[c] = prev;
+    this.#derive();
+    this.#refreshEditbar();
+  }
+
+  static #onResetEdits(_event, _target) {
+    if (!this.#base) return;
+    this.#edits = null;
+    this.#undoStack = [];
+    this.#derive();
+    this.#refreshEditbar();
   }
 
   static async #onCreateScene(_event, target) {
