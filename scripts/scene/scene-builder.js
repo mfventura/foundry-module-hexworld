@@ -52,13 +52,12 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
   const upload = await FP.upload("data", dir, file, {}, { notify: false });
   const src = upload?.path ?? `${dir}/${filename}`;
 
-  const scene = await Scene.create({
+  const sceneData = {
     name: sceneName,
     width: world.grid.pixelWidth,
     height: world.grid.pixelHeight,
     padding: 0,
     backgroundColor: "#1e3d60",
-    background: { src },
     grid: {
       type: world.params.gridType,
       size: world.params.cellSize,
@@ -67,7 +66,6 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
       alpha: 0.2
     },
     tokenVision: false,
-    fog: { exploration: false },
     flags: {
       hexworld: {
         version: 1,
@@ -76,6 +74,31 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         stats: world.stats
       }
     }
-  });
+  };
+
+  // V14 moved the scene background into the embedded Levels collection
+  // (LevelData.background is a LevelTexture: {src, tint, alphaThreshold, color}).
+  // A root-level `background` is silently dropped by the v14 schema, which
+  // would leave the created scene showing only an empty grid.
+  const v14 = game.release.generation >= 14;
+  if (v14) {
+    sceneData.levels = [{ name: sceneName, background: { src } }];
+  } else {
+    sceneData.background = { src };
+    sceneData.fog = { exploration: false };
+  }
+
+  const scene = await Scene.create(sceneData);
+
+  // Belt and braces on v14: if the level data was not accepted at creation
+  // time, attach it as an embedded document instead.
+  if (v14 && !sceneHasBackground(scene, src)) {
+    await scene.createEmbeddedDocuments("Level", [{ name: sceneName, background: { src } }]);
+  }
   return scene;
+}
+
+function sceneHasBackground(scene, src) {
+  if (!scene.levels) return false;
+  return scene.levels.some(level => level.background?.src === src);
 }

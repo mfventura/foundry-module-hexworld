@@ -9,6 +9,7 @@ Módulo de Foundry VTT (**objetivo: v14**, mínimo v13) de generación procedura
 - **La geometría viene de Foundry.** `generator/grid.js` instancia `foundry.grid.SquareGrid`/`HexagonalGrid` con el mismo `{type, size}` que tendrá la escena; centros, vértices y vecinos salen de ahí. Así la imagen renderizada encaja píxel-perfecto con la rejilla de la escena (padding 0, origen 0,0). No reimplementar matemática hexagonal a mano.
 - **Objetivo Foundry v14.** Se usan directamente los namespaces modernos: `foundry.applications.ux.FormDataExtended`, `foundry.applications.apps.FilePicker.implementation`, `foundry.grid.*`; el hook `renderSceneDirectory` recibe HTMLElement (AppV2). No añadir fallbacks a globals legacy (v12) — están eliminados o en vías de eliminación.
 - **V14 y Scene Levels**: `getCenterPoint`/`getAdjacentOffsets` pueden devolver componentes 3D (`elevation`, `k`); el generador trabaja en 2D e ignora/dedupe esos campos (ver `grid.js`). Los breaking changes de v14 (Active Effects V2, eliminación de MeasuredTemplates y TinyMCE) no afectan al módulo.
+- **Fondo de escena en v14**: `Scene.background` ya NO existe en la raíz del esquema — el fondo vive en la colección embebida `levels` (`LevelData.background = {src, tint, alphaThreshold, color}`). Un `background` raíz se descarta en silencio (escena con rejilla vacía). `scene-builder.js` bifurca por `game.release.generation` (≥14 → `levels: [{background: {src}}]`; 13 → `background` raíz + `fog.exploration`).
 
 ## Pipeline (generator/worldgen.js)
 
