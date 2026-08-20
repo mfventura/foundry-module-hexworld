@@ -11,6 +11,7 @@ import { renderWorld } from "./render/renderer.js";
 import { HexWorldLayer } from "./canvas/hexworld-layer.js";
 import { DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
 import { HexWorldIconConfig } from "./ui/icon-config.js";
+import { hexToolTab, activateHexTab, HEX_TAB_DEFAULT_TOOL } from "./ui/tool-tabs.js";
 
 Hooks.once("init", () => {
   game.settings.register("hexworld", "lastParams", {
@@ -83,76 +84,74 @@ Hooks.on("getSceneControlButtons", controls => {
   const flags = canvas?.scene?.flags?.hexworld;
   if (!flags?.params || (flags.version ?? 1) < 2) return;
 
-  // v13+: SceneControls ya no activa canvas[control.layer]; cada control debe
+  // v13+: SceneControls ya no activa canvas[control.layer]; el control debe
   // activar su capa (mismo patrón que WallsLayer.prepareSceneControls en el
-  // core). Ambos grupos comparten la capa hexworld — layerOptions.name es
-  // dinámico para que el core no rebote al otro grupo al activarla.
-  const activateLayer = (_event, active) => {
-    if (active) canvas.hexworld?.activate();
-  };
-  // Shared utility buttons, present in both groups.
-  const utilityTools = {
-    hud: {
-      name: "hud", order: 90, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
-      button: true, onChange: () => canvas.hexworld?.toggleHud()
-    },
-    undo: {
-      name: "undo", order: 91, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
-      button: true, onChange: () => canvas.hexworld?.undo()
-    },
-    redo: {
-      name: "redo", order: 92, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
-      button: true, onChange: () => canvas.hexworld?.redo()
-    }
-  };
+  // core). Un ÚNICO grupo en la columna: sus dos primeros botones son las
+  // pestañas (terreno / asentamientos) y el resto de herramientas se filtra
+  // por visibilidad según la pestaña activa (tool-tabs.js re-renderiza los
+  // controles con reset al cambiar).
+  const tab = hexToolTab();
 
   controls.hexworld = {
     name: "hexworld",
     order: 80,
-    title: "HEXWORLD.ControlsTerrain",
-    icon: "fa-solid fa-mountain-sun",
+    title: "HEXWORLD.ControlsMain",
+    icon: "fa-solid fa-earth-europe",
     layer: "hexworld",
-    activeTool: "raise",
-    onChange: activateLayer,
+    activeTool: HEX_TAB_DEFAULT_TOOL[tab],
+    onChange: (_event, active) => {
+      if (active) canvas.hexworld?.activate();
+    },
     onToolChange: () => canvas.hexworld?.clearRouteAnchor(),
     tools: {
-      raise: { name: "raise", order: 1, title: "HEXWORLD.ToolRaise", icon: "fa-solid fa-arrow-up-from-ground-water" },
-      lower: { name: "lower", order: 2, title: "HEXWORLD.ToolLower", icon: "fa-solid fa-arrow-down" },
-      smooth: { name: "smooth", order: 3, title: "HEXWORLD.ToolSmooth", icon: "fa-solid fa-wand-magic-sparkles" },
-      water: { name: "water", order: 4, title: "HEXWORLD.ToolWater", icon: "fa-solid fa-water" },
-      land: { name: "land", order: 5, title: "HEXWORLD.ToolLand", icon: "fa-solid fa-seedling" },
-      mountain: { name: "mountain", order: 6, title: "HEXWORLD.ToolMountain", icon: "fa-solid fa-mountain" },
-      biome: { name: "biome", order: 7, title: "HEXWORLD.ToolBiome", icon: "fa-solid fa-palette" },
-      riverAdd: { name: "riverAdd", order: 8, title: "HEXWORLD.ToolRiverAdd", icon: "fa-solid fa-wave-square" },
-      riverRemove: { name: "riverRemove", order: 9, title: "HEXWORLD.ToolRiverRemove", icon: "fa-solid fa-droplet-slash" },
-      ...utilityTools,
+      // --- Sub-group tabs ---
+      tabTerrain: {
+        name: "tabTerrain", order: 1, title: "HEXWORLD.ControlsTerrain",
+        icon: "fa-solid fa-mountain-sun",
+        button: true, onChange: () => activateHexTab("terrain")
+      },
+      tabSites: {
+        name: "tabSites", order: 2, title: "HEXWORLD.ControlsSites",
+        icon: "fa-solid fa-signs-post",
+        button: true, onChange: () => activateHexTab("sites")
+      },
+      // --- Terrain tab ---
+      raise: { name: "raise", order: 10, title: "HEXWORLD.ToolRaise", icon: "fa-solid fa-arrow-up-from-ground-water", visible: tab === "terrain" },
+      lower: { name: "lower", order: 11, title: "HEXWORLD.ToolLower", icon: "fa-solid fa-arrow-down", visible: tab === "terrain" },
+      smooth: { name: "smooth", order: 12, title: "HEXWORLD.ToolSmooth", icon: "fa-solid fa-wand-magic-sparkles", visible: tab === "terrain" },
+      water: { name: "water", order: 13, title: "HEXWORLD.ToolWater", icon: "fa-solid fa-water", visible: tab === "terrain" },
+      land: { name: "land", order: 14, title: "HEXWORLD.ToolLand", icon: "fa-solid fa-seedling", visible: tab === "terrain" },
+      mountain: { name: "mountain", order: 15, title: "HEXWORLD.ToolMountain", icon: "fa-solid fa-mountain", visible: tab === "terrain" },
+      biome: { name: "biome", order: 16, title: "HEXWORLD.ToolBiome", icon: "fa-solid fa-palette", visible: tab === "terrain" },
+      riverAdd: { name: "riverAdd", order: 17, title: "HEXWORLD.ToolRiverAdd", icon: "fa-solid fa-wave-square", visible: tab === "terrain" },
+      riverRemove: { name: "riverRemove", order: 18, title: "HEXWORLD.ToolRiverRemove", icon: "fa-solid fa-droplet-slash", visible: tab === "terrain" },
+      // --- Sites tab ---
+      site: { name: "site", order: 10, title: "HEXWORLD.ToolSite", icon: "fa-solid fa-location-dot", visible: tab === "sites" },
+      rename: { name: "rename", order: 11, title: "HEXWORLD.ToolRename", icon: "fa-solid fa-signature", visible: tab === "sites" },
+      roadMinor: { name: "roadMinor", order: 12, title: "HEXWORLD.ToolRoadMinor", icon: "fa-solid fa-shoe-prints", visible: tab === "sites" },
+      roadMajor: { name: "roadMajor", order: 13, title: "HEXWORLD.ToolRoadMajor", icon: "fa-solid fa-road", visible: tab === "sites" },
+      roadErase: { name: "roadErase", order: 14, title: "HEXWORLD.ToolRoadErase", icon: "fa-solid fa-road-circle-xmark", visible: tab === "sites" },
+      // --- Always available ---
+      hud: {
+        name: "hud", order: 90, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
+        button: true, onChange: () => canvas.hexworld?.toggleHud()
+      },
+      undo: {
+        name: "undo", order: 91, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
+        button: true, onChange: () => canvas.hexworld?.undo()
+      },
+      redo: {
+        name: "redo", order: 92, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
+        button: true, onChange: () => canvas.hexworld?.redo()
+      },
       edit: {
-        name: "edit", order: 95, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
+        name: "edit", order: 93, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
         button: true, onChange: () => HexWorldGeneratorApp.openForScene(canvas.scene)
       },
       reset: {
-        name: "reset", order: 96, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 94, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
-    }
-  };
-
-  controls.hexworldSites = {
-    name: "hexworldSites",
-    order: 81,
-    title: "HEXWORLD.ControlsSites",
-    icon: "fa-solid fa-signs-post",
-    layer: "hexworld",
-    activeTool: "site",
-    onChange: activateLayer,
-    onToolChange: () => canvas.hexworld?.clearRouteAnchor(),
-    tools: {
-      site: { name: "site", order: 1, title: "HEXWORLD.ToolSite", icon: "fa-solid fa-location-dot" },
-      rename: { name: "rename", order: 2, title: "HEXWORLD.ToolRename", icon: "fa-solid fa-signature" },
-      roadMinor: { name: "roadMinor", order: 3, title: "HEXWORLD.ToolRoadMinor", icon: "fa-solid fa-shoe-prints" },
-      roadMajor: { name: "roadMajor", order: 4, title: "HEXWORLD.ToolRoadMajor", icon: "fa-solid fa-road" },
-      roadErase: { name: "roadErase", order: 5, title: "HEXWORLD.ToolRoadErase", icon: "fa-solid fa-road-circle-xmark" },
-      ...utilityTools
     }
   };
 });

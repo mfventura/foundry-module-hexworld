@@ -9,6 +9,7 @@ import { SITE } from "../generator/sites.js";
 import { configuredSiteIcons } from "../render/site-icons.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
+import { activateHexTab } from "../ui/tool-tabs.js";
 
 export const SITE_TYPES = [
   { id: SITE.VILLAGE, key: "SiteVillage" },
@@ -87,8 +88,8 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const b of this.element.querySelectorAll(".hw-swatch[data-biome]")) {
           b.classList.toggle("active", b === btn);
         }
-        // Picking a color is an intent to paint biomes: switch group + tool.
-        ui.controls.activate({ control: "hexworld", tool: "biome" });
+        // Picking a color is an intent to paint biomes: switch tab + tool.
+        activateHexTab("terrain", "biome");
       });
     }
 
@@ -98,7 +99,7 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         for (const b of this.element.querySelectorAll(".hw-site-swatch")) {
           b.classList.toggle("active", b === btn);
         }
-        ui.controls.activate({ control: "hexworldSites", tool: "site" });
+        activateHexTab("sites", "site");
       });
     }
 
