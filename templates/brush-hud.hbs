@@ -10,6 +10,15 @@
     <input type="range" name="strength" min="0.02" max="0.15" step="0.01" value="{{strength}}">
     <output></output>
   </div>
+  <div class="hw-hud-row">
+    <label>{{localize "HEXWORLD.View"}}</label>
+    <select name="viewMode">
+      <option value="terrain" {{#if (eq viewMode "terrain")}}selected{{/if}}>{{localize "HEXWORLD.ViewTerrain"}}</option>
+      <option value="height" {{#if (eq viewMode "height")}}selected{{/if}}>{{localize "HEXWORLD.ViewHeight"}}</option>
+      <option value="temp" {{#if (eq viewMode "temp")}}selected{{/if}}>{{localize "HEXWORLD.ViewTemp"}}</option>
+      <option value="moist" {{#if (eq viewMode "moist")}}selected{{/if}}>{{localize "HEXWORLD.ViewMoist"}}</option>
+    </select>
+  </div>
   <div class="hw-hud-subtitle">{{localize "HEXWORLD.ToolBiome"}}</div>
   <div class="hw-palette">
     {{#each swatches}}
@@ -19,4 +28,6 @@
     <button type="button" class="hw-swatch hw-swatch-erase{{#if eraserActive}} active{{/if}}" data-biome="255"
             data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}"><i class="fa-solid fa-eraser"></i></button>
   </div>
+  <button type="button" class="hw-sea-btn"><i class="fa-solid fa-arrow-up-from-water-pump"></i> {{localize "HEXWORLD.SeaLevel"}}</button>
+  <div class="hw-hud-info"></div>
 </div>

@@ -22,12 +22,12 @@ export class TerrainMesh {
   #sprite = null;
 
   /** Render (or re-render) the world and attach the sprite to the canvas. */
-  draw(world) {
+  draw(world, mode = "terrain") {
     const g = world.grid;
     const scale = Math.min(1, Math.sqrt(MAX_TEXTURE_PIXELS / (g.pixelWidth * g.pixelHeight)));
 
     this.#canvasEl ??= document.createElement("canvas");
-    renderWorld(world, this.#canvasEl, scale);
+    renderWorld(world, this.#canvasEl, scale, mode);
 
     if (!this.#sprite) {
       this.#texture = PIXI.Texture.from(this.#canvasEl);

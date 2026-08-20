@@ -2,7 +2,7 @@
   "id": "hexworld",
   "title": "HexWorld – Generador de Mundos",
   "description": "Generador procedural de mundos de fantasía integrado en Foundry VTT: alturas, climas, biomas, ríos, mares y montañas, con creación directa de escenas en rejilla hexagonal o cuadrada.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "compatibility": {
     "minimum": "13",
     "verified": "14"
@@ -14,7 +14,7 @@
   ],
   "url": "https://github.com/mfventura/foundry-module-hexworld",
   "manifest": "https://github.com/mfventura/foundry-module-hexworld/releases/latest/download/module.json",
-  "download": "https://github.com/mfventura/foundry-module-hexworld/releases/download/v0.6.0/module.zip",
+  "download": "https://github.com/mfventura/foundry-module-hexworld/releases/download/v0.7.0/module.zip",
   "bugs": "https://github.com/mfventura/foundry-module-hexworld/issues",
   "readme": "https://github.com/mfventura/foundry-module-hexworld/blob/main/README.md",
   "esmodules": [

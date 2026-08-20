@@ -73,8 +73,16 @@ Hooks.on("getSceneControlButtons", controls => {
         name: "undo", order: 10, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
         button: true, onChange: () => canvas.hexworld?.undo()
       },
+      redo: {
+        name: "redo", order: 11, title: "HEXWORLD.Redo", icon: "fa-solid fa-rotate-right",
+        button: true, onChange: () => canvas.hexworld?.redo()
+      },
+      edit: {
+        name: "edit", order: 12, title: "HEXWORLD.EditScene", icon: "fa-solid fa-sliders",
+        button: true, onChange: () => HexWorldGeneratorApp.openForScene(canvas.scene)
+      },
       reset: {
-        name: "reset", order: 11, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 13, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
     }

@@ -29,6 +29,13 @@ export const PAINTABLE_BIOMES = [
   { id: B.BEACH, key: "Beach" }
 ];
 
+/** i18n key suffix per biome id (all biomes, for the cell inspector). */
+export const BIOME_KEYS = {
+  [B.OCEAN]: "Ocean",
+  [B.LAKE]: "Lake",
+  ...Object.fromEntries(PAINTABLE_BIOMES.map(({ id, key }) => [id, key]))
+};
+
 export const BIOME_COLORS = {
   [B.OCEAN]: "#2e5c8a",
   [B.LAKE]: "#5d8fbf",

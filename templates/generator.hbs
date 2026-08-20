@@ -88,10 +88,18 @@
       </fieldset>
     </form>
 
+    {{#if editSceneName}}
+    <p class="hw-editing-note"><i class="fa-solid fa-sliders"></i> {{localize "HEXWORLD.EditingScene"}} <strong>{{editSceneName}}</strong></p>
+    {{/if}}
     <div class="hw-buttons">
       <button type="button" class="hw-generate" data-action="generate">
         <i class="fa-solid fa-mountain-sun"></i> {{localize "HEXWORLD.Generate"}}
       </button>
+      {{#if editSceneName}}
+      <button type="button" class="hw-apply" data-action="applyToScene" disabled>
+        <i class="fa-solid fa-floppy-disk"></i> {{localize "HEXWORLD.ApplyToScene"}}
+      </button>
+      {{/if}}
       <button type="button" class="hw-create" data-action="createScene" disabled>
         <i class="fa-solid fa-map"></i> {{localize "HEXWORLD.CreateScene"}}
       </button>
@@ -135,9 +143,18 @@
       <button type="button" data-action="undoEdit" data-tooltip="{{localize 'HEXWORLD.Undo'}}" disabled>
         <i class="fa-solid fa-rotate-left"></i>
       </button>
+      <button type="button" data-action="redoEdit" data-tooltip="{{localize 'HEXWORLD.Redo'}}" disabled>
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
       <button type="button" data-action="resetEdits" data-tooltip="{{localize 'HEXWORLD.ResetEdits'}}" disabled>
         <i class="fa-solid fa-eraser"></i>
       </button>
+      <select name="viewMode" data-tooltip="{{localize 'HEXWORLD.View'}}">
+        <option value="terrain">{{localize "HEXWORLD.ViewTerrain"}}</option>
+        <option value="height">{{localize "HEXWORLD.ViewHeight"}}</option>
+        <option value="temp">{{localize "HEXWORLD.ViewTemp"}}</option>
+        <option value="moist">{{localize "HEXWORLD.ViewMoist"}}</option>
+      </select>
     </div>
     <div class="hw-palette hw-palette-bar">
       {{#each biomeSwatches}}
@@ -147,7 +164,11 @@
       <button type="button" class="hw-swatch hw-swatch-erase" data-biome="255"
               data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}" disabled><i class="fa-solid fa-eraser"></i></button>
     </div>
-    <canvas class="hw-canvas" width="640" height="480"></canvas>
+    <div class="hw-canvas-wrap">
+      <canvas class="hw-canvas" width="640" height="480"></canvas>
+      <div class="hw-brush-cursor"></div>
+    </div>
+    <div class="hw-inspect"></div>
     <div class="hw-stats">{{localize "HEXWORLD.NoWorld"}}</div>
   </section>
 </div>

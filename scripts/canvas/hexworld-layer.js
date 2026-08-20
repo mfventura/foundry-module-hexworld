@@ -35,15 +35,22 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   riverEdits = null;
   world = null;
   brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND };
+  /** Current render mode: terrain | height | temp | moist (client-local). */
+  viewMode = "terrain";
 
   #mesh = null;
   #hud = null;
   #painting = false;
-  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}|null} */
+  /** @type {{channel: "elev"|"biome"|"river", cells: Map<number, number>}|null} */
   #strokeUndo = null;
-  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}[]} */
+  /** @type {{channel: string, cells: Map<number, number>}[]} */
   #undoStack = [];
+  /** @type {{channel: string, cells: Map<number, number>}[]} */
+  #redoStack = [];
   #lastDerive = 0;
+  /** @type {PIXI.Graphics|null} */
+  #cursor = null;
+  #onCursorMove = null;
 
   /** Whether the viewed scene is a HexWorld data-driven scene. */
   get isHexWorldScene() {
@@ -69,19 +76,57 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (game.user.isGM && this.world) {
       this.#hud ??= new BrushHud(this);
       this.#hud.render({ force: true });
+      this.#activateCursor();
     }
   }
 
   _deactivate() {
     super._deactivate();
     this.#hud?.close();
+    this.#deactivateCursor();
+  }
+
+  /* -------------------------------------------- */
+  /*  Brush cursor                                 */
+  /* -------------------------------------------- */
+
+  #activateCursor() {
+    this.#cursor ??= this.addChild(new PIXI.Graphics());
+    this.#cursor.visible = false;
+    this.#onCursorMove ??= ev => this.#updateCursor(ev);
+    canvas.stage.on("pointermove", this.#onCursorMove);
+  }
+
+  #deactivateCursor() {
+    if (this.#onCursorMove) canvas.stage.off("pointermove", this.#onCursorMove);
+    if (this.#cursor) this.#cursor.visible = false;
+  }
+
+  #updateCursor(ev) {
+    const cur = this.#cursor;
+    if (!cur) return;
+    const tool = this.activeTool;
+    if (!this.world || !PAINT_TOOLS.has(tool)) { cur.visible = false; return; }
+    const p = ev.getLocalPosition(canvas.stage);
+    const areaTool = !RIVER_TOOLS.has(tool);
+    const r = areaTool ? this.brush.radius * this.world.grid.size : this.world.grid.size * 0.3;
+    cur.clear();
+    cur.lineStyle(2, 0xffffff, 0.85);
+    cur.beginFill(0xffffff, 0.08);
+    cur.drawCircle(0, 0, r);
+    cur.endFill();
+    cur.position.set(p.x, p.y);
+    cur.visible = true;
   }
 
   #destroyState() {
     this.#mesh?.destroy();
     this.#mesh = null;
     this.#hud?.close();
+    this.#deactivateCursor();
+    this.#cursor = null; // children are destroyed with the layer draw cycle
     this.#undoStack = [];
+    this.#redoStack = [];
     this.#strokeUndo = null;
     this.#painting = false;
     this.base = this.edits = this.overrides = this.riverEdits = this.world = null;
@@ -99,7 +144,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.#mesh = new TerrainMesh();
-      this.#mesh.draw(this.world);
+      this.#mesh.draw(this.world, this.viewMode);
     } catch (err) {
       console.error("HexWorld | Failed to build terrain for the viewed scene", err);
       this.#destroyState();
@@ -199,13 +244,20 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   #refresh() {
     if (!this.base) return;
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
-    this.#mesh?.draw(this.world);
+    this.#mesh?.draw(this.world, this.viewMode);
+  }
+
+  /** Switch the false-color view; repaints without re-deriving. */
+  setViewMode(mode) {
+    this.viewMode = mode;
+    if (this.world) this.#mesh?.draw(this.world, mode);
   }
 
   #endStroke() {
     if (this.#strokeUndo?.cells.size) {
       this.#undoStack.push(this.#strokeUndo);
       if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
+      this.#redoStack = []; // a new stroke invalidates the redo history
     }
     this.#strokeUndo = null;
     this.#refresh();
@@ -227,12 +279,32 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     }, { hexworldLocal: true });
   }
 
+  /** Write a stroke's cell values into its channel; returns the inverse stroke. */
+  #applyStroke(stroke) {
+    const target = { biome: this.overrides, river: this.riverEdits, elev: this.edits }[stroke.channel];
+    if (!target) return null;
+    const inverse = new Map();
+    for (const [c, v] of stroke.cells) {
+      inverse.set(c, target[c]);
+      target[c] = v;
+    }
+    return { channel: stroke.channel, cells: inverse };
+  }
+
   undo() {
     const stroke = this.#undoStack.pop();
     if (!stroke) return;
-    const target = { biome: this.overrides, river: this.riverEdits, elev: this.edits }[stroke.channel];
-    if (!target) return;
-    for (const [c, prev] of stroke.cells) target[c] = prev;
+    const inverse = this.#applyStroke(stroke);
+    if (inverse) this.#redoStack.push(inverse);
+    this.#refresh();
+    this.#persist();
+  }
+
+  redo() {
+    const stroke = this.#redoStack.pop();
+    if (!stroke) return;
+    const inverse = this.#applyStroke(stroke);
+    if (inverse) this.#undoStack.push(inverse);
     this.#refresh();
     this.#persist();
   }
@@ -243,6 +315,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.overrides = null;
     this.riverEdits = null;
     this.#undoStack = [];
+    this.#redoStack = [];
     this.#refresh();
     this.#persist();
   }

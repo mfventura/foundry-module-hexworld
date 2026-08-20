@@ -133,6 +133,43 @@
   min-width: 40px;
 }
 
+.hexworld-app .hw-canvas-wrap {
+  position: relative;
+}
+
+.hexworld-app .hw-editing-note {
+  margin: 4px 0 0;
+  padding: 3px 6px;
+  font-size: var(--font-size-12, 12px);
+  border: 1px dashed var(--color-border-light-2, #7a7971);
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
+.hexworld-app .hw-brush-cursor {
+  display: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hexworld-app .hw-inspect {
+  min-height: 16px;
+  font-size: var(--font-size-12, 12px);
+  opacity: 0.85;
+  text-align: center;
+}
+
+.hexworld-app .hw-editbar select[name=viewMode] {
+  flex: 0 0 auto;
+  height: 26px;
+  font-size: var(--font-size-11, 11px);
+}
+
 .hexworld-app .hw-canvas {
   cursor: crosshair;
   touch-action: none;
@@ -235,6 +272,35 @@
   background: rgba(0, 0, 0, 0.35);
   color: #ddd;
   font-size: 11px;
+}
+
+#hexworld-brush-hud select[name=viewMode] {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  font-size: 11px;
+  color: #eee;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+#hexworld-brush-hud .hw-sea-btn {
+  width: 100%;
+  margin-top: 6px;
+  height: 24px;
+  font-size: 11px;
+  line-height: 1;
+  color: #eee;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#hexworld-brush-hud .hw-hud-info {
+  margin-top: 5px;
+  min-height: 14px;
+  font-size: 11px;
+  opacity: 0.85;
 }
 
 /* Scenes sidebar button */

@@ -13,7 +13,11 @@ import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString } from "../lib/random.js";
-import { NO_OVERRIDE } from "../lib/codec.js";
+import {
+  NO_OVERRIDE, encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
+  encodeBytes, decodeBytes
+} from "../lib/codec.js";
+import { cellIndexAt, describeCell } from "./cell-info.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -41,8 +45,27 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   static open() {
     this.#instance ??= new this();
+    this.#instance.#editScene = null;
+    this.#instance.#algo = 2;
     this.#instance.render({ force: true });
     return this.#instance;
+  }
+
+  /**
+   * Open the generator bound to an existing HexWorld scene: params come from
+   * its flags, painted channels are loaded, grid-structure fields are locked
+   * (the cell arrays must keep their length) and "Apply to scene" writes the
+   * regenerated params + channels back to the scene flags.
+   */
+  static openForScene(scene) {
+    const flags = scene?.flags?.hexworld;
+    if (!flags?.params || (flags.version ?? 1) < 2) return this.open();
+    const app = (this.#instance ??= new this());
+    app.#editScene = scene;
+    app.#algo = flags.params.algo ?? 1; // never upgrade an existing world's terrain
+    app.#pendingLoad = true;
+    app.render({ force: true });
+    return app;
   }
 
   /** @type {object|null} result of buildBase() */
@@ -59,12 +82,20 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   #tool = "raise";
   #brushBiome = PAINTABLE_BIOMES[0].id;
+  #viewMode = "terrain";
   #painting = false;
-  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}|null} */
+  /** @type {{channel: "elev"|"biome"|"river", cells: Map<number, number>}|null} */
   #strokeUndo = null;
-  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}[]} */
+  /** @type {{channel: string, cells: Map<number, number>}[]} */
   #undoStack = [];
+  /** @type {{channel: string, cells: Map<number, number>}[]} */
+  #redoStack = [];
   #lastDerive = 0;
+  /** @type {Scene|null} scene being edited in place (openForScene) */
+  #editScene = null;
+  /** Pipeline version for the next generation (2 for new worlds). */
+  #algo = 2;
+  #pendingLoad = false;
 
   static DEFAULT_OPTIONS = {
     id: "hexworld-generator",
@@ -79,7 +110,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       randomSeed: HexWorldGeneratorApp.#onRandomSeed,
       generate: HexWorldGeneratorApp.#onGenerate,
       createScene: HexWorldGeneratorApp.#onCreateScene,
+      applyToScene: HexWorldGeneratorApp.#onApplyToScene,
       undoEdit: HexWorldGeneratorApp.#onUndoEdit,
+      redoEdit: HexWorldGeneratorApp.#onRedoEdit,
       resetEdits: HexWorldGeneratorApp.#onResetEdits
     }
   };
@@ -89,7 +122,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   };
 
   async _prepareContext(_options) {
-    const saved = game.settings.get("hexworld", "lastParams") ?? {};
+    const saved = this.#editScene
+      ? this.#editScene.flags.hexworld.params
+      : (game.settings.get("hexworld", "lastParams") ?? {});
     const p = foundry.utils.mergeObject(foundry.utils.deepClone(DEFAULT_PARAMS), saved, { inplace: false });
     if (!p.sceneName) p.sceneName = game.i18n.localize("HEXWORLD.DefaultSceneName");
     if (!p.seed) p.seed = randomSeedString();
@@ -123,7 +158,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       active: id === this.#brushBiome
     }));
 
-    return { p, gridTypes, templates, climates, biomeSwatches };
+    return { p, gridTypes, templates, climates, biomeSwatches, editSceneName: this.#editScene?.name ?? null };
   }
 
   _onRender(_context, _options) {
@@ -175,6 +210,31 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       canvas.addEventListener("pointermove", ev => this.#onPaintMove(ev));
       canvas.addEventListener("pointerup", ev => this.#onPaintEnd(ev));
       canvas.addEventListener("pointercancel", ev => this.#onPaintEnd(ev));
+      canvas.addEventListener("pointermove", ev => this.#onHover(ev));
+      canvas.addEventListener("pointerleave", () => this.#onHoverEnd());
+    }
+
+    // False-color view selector.
+    const viewSel = root.querySelector("select[name=viewMode]");
+    if (viewSel) {
+      viewSel.value = this.#viewMode;
+      viewSel.addEventListener("change", () => {
+        this.#viewMode = viewSel.value;
+        this.#drawPreview();
+      });
+    }
+
+    // Scene edit mode: lock grid-structure fields (arrays must keep length)
+    // and load the scene's world on first render.
+    if (this.#editScene) {
+      for (const name of ["cols", "rows", "cellSize", "gridType"]) {
+        const el = root.querySelector(`[name=${name}]`);
+        if (el) el.disabled = true;
+      }
+      if (this.#pendingLoad) {
+        this.#pendingLoad = false;
+        this.#loadFromScene();
+      }
     }
 
     this.#refreshToolButtons();
@@ -182,6 +242,35 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (this.#world) {
       this.#drawPreview();
       this.#updateStats();
+      const createBtn = root.querySelector("button[data-action=createScene]");
+      if (createBtn) createBtn.disabled = false;
+      const applyBtn = root.querySelector("button[data-action=applyToScene]");
+      if (applyBtn) applyBtn.disabled = false;
+    }
+  }
+
+  _onClose(options) {
+    super._onClose(options);
+    this.#editScene = null;
+    this.#algo = 2;
+  }
+
+  /** Load base + painted channels from the edited scene's flags. */
+  #loadFromScene() {
+    const flags = this.#editScene?.flags?.hexworld;
+    if (!flags?.params) return;
+    try {
+      this.#base = buildBase(flags.params);
+      const n = this.#base.grid.n;
+      this.#edits = decodeEdits(flags.edits ?? null, n);
+      this.#overrides = decodeOverrides(flags.biomes ?? null, n);
+      this.#riverEdits = decodeBytes(flags.rivers ?? null, n);
+      this.#undoStack = [];
+      this.#redoStack = [];
+      this.#derive();
+    } catch (err) {
+      console.error("HexWorld | Failed to load the scene into the generator", err);
+      ui.notifications.error(game.i18n.localize("HEXWORLD.ErrGenerate"));
     }
   }
 
@@ -193,7 +282,17 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const form = this.element.querySelector("form.hw-form");
     const data = new foundry.applications.ux.FormDataExtended(form).object;
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || lo));
+    // Structure fields are locked in scene-edit mode: force them from the
+    // scene so disabled inputs can never corrupt the cell-array length.
+    if (this.#editScene) {
+      const sp = this.#editScene.flags.hexworld.params;
+      data.gridType = sp.gridType;
+      data.cols = sp.cols;
+      data.rows = sp.rows;
+      data.cellSize = sp.cellSize;
+    }
     return {
+      algo: this.#algo,
       sceneName: String(data.sceneName || game.i18n.localize("HEXWORLD.DefaultSceneName")),
       seed: String(data.seed || "").trim(),
       template: String(data.template),
@@ -220,7 +319,42 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const box = this.element.querySelector(".hw-preview");
     const maxW = Math.max(300, (box?.clientWidth ?? 640) - 8);
     this.#lastScale = previewScale(this.#world, maxW, 540);
-    renderWorld(this.#world, canvas, this.#lastScale);
+    renderWorld(this.#world, canvas, this.#lastScale, this.#viewMode);
+  }
+
+  /* Brush cursor overlay + cell inspector, both fed by canvas pointermove. */
+  #onHover(ev) {
+    const cursor = this.element.querySelector(".hw-brush-cursor");
+    const info = this.element.querySelector(".hw-inspect");
+    if (!this.#base || !this.#world) { this.#onHoverEnd(); return; }
+    const canvas = ev.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+
+    if (cursor) {
+      const isRiver = RIVER_TOOLS.has(this.#tool);
+      const { radius } = this.#brushSettings();
+      const worldR = isRiver ? this.#base.grid.size * 0.3 : radius * this.#base.grid.size;
+      const screenR = worldR * this.#lastScale * (rect.width / (canvas.width || 1));
+      const parentRect = cursor.offsetParent?.getBoundingClientRect() ?? rect;
+      cursor.style.display = "block";
+      cursor.style.width = `${screenR * 2}px`;
+      cursor.style.height = `${screenR * 2}px`;
+      cursor.style.left = `${ev.clientX - parentRect.left}px`;
+      cursor.style.top = `${ev.clientY - parentRect.top}px`;
+    }
+
+    if (info) {
+      const p = this.#canvasPoint(ev);
+      const c = p ? cellIndexAt(this.#world, p.x, p.y) : -1;
+      info.textContent = c >= 0 ? describeCell(this.#world, c) : "";
+    }
+  }
+
+  #onHoverEnd() {
+    const cursor = this.element.querySelector(".hw-brush-cursor");
+    if (cursor) cursor.style.display = "none";
+    const info = this.element.querySelector(".hw-inspect");
+    if (info) info.textContent = "";
   }
 
   #updateStats() {
@@ -258,6 +392,20 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     }
     const undoBtn = bar.querySelector("button[data-action=undoEdit]");
     if (undoBtn) undoBtn.disabled = !ready || !this.#undoStack.length;
+    const redoBtn = bar.querySelector("button[data-action=redoEdit]");
+    if (redoBtn) redoBtn.disabled = !ready || !this.#redoStack.length;
+  }
+
+  /** Write a stroke's cell values into its channel; returns the inverse stroke. */
+  #applyStroke(stroke) {
+    const target = { biome: this.#overrides, river: this.#riverEdits, elev: this.#edits }[stroke.channel];
+    if (!target) return null;
+    const inverse = new Map();
+    for (const [c, v] of stroke.cells) {
+      inverse.set(c, target[c]);
+      target[c] = v;
+    }
+    return { channel: stroke.channel, cells: inverse };
   }
 
   #derive() {
@@ -315,6 +463,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (this.#strokeUndo?.cells.size) {
       this.#undoStack.push(this.#strokeUndo);
       if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
+      this.#redoStack = []; // a new stroke invalidates the redo history
     }
     this.#strokeUndo = null;
     this.#derive();
@@ -382,10 +531,15 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       // Let the disabled state paint before the synchronous generation work.
       await new Promise(r => setTimeout(r, 20));
       this.#base = buildBase(params);
-      this.#edits = null;
-      this.#overrides = null;
-      this.#riverEdits = null;
+      // In scene-edit mode the painted channels survive a re-generation: the
+      // grid structure is locked, so the arrays still fit the new base.
+      if (!this.#editScene) {
+        this.#edits = null;
+        this.#overrides = null;
+        this.#riverEdits = null;
+      }
       this.#undoStack = [];
+      this.#redoStack = [];
       this.#derive();
       const createBtn = this.element.querySelector("button[data-action=createScene]");
       if (createBtn) createBtn.disabled = false;
@@ -401,9 +555,17 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   static #onUndoEdit(_event, _target) {
     const stroke = this.#undoStack.pop();
     if (!stroke) return;
-    const target = { biome: this.#overrides, river: this.#riverEdits, elev: this.#edits }[stroke.channel];
-    if (!target) return;
-    for (const [c, prev] of stroke.cells) target[c] = prev;
+    const inverse = this.#applyStroke(stroke);
+    if (inverse) this.#redoStack.push(inverse);
+    this.#derive();
+    this.#refreshEditbar();
+  }
+
+  static #onRedoEdit(_event, _target) {
+    const stroke = this.#redoStack.pop();
+    if (!stroke) return;
+    const inverse = this.#applyStroke(stroke);
+    if (inverse) this.#undoStack.push(inverse);
     this.#derive();
     this.#refreshEditbar();
   }
@@ -414,8 +576,31 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#overrides = null;
     this.#riverEdits = null;
     this.#undoStack = [];
+    this.#redoStack = [];
     this.#derive();
     this.#refreshEditbar();
+  }
+
+  /** Write the previewed world (params + painted channels) back to the scene. */
+  static async #onApplyToScene(_event, target) {
+    if (!this.#editScene || !this.#world) return;
+    target.disabled = true;
+    try {
+      await this.#editScene.update({
+        "flags.hexworld.seed": this.#world.params.seed,
+        "flags.hexworld.params": this.#world.params,
+        "flags.hexworld.edits": encodeEdits(this.#edits),
+        "flags.hexworld.biomes": encodeOverrides(this.#overrides),
+        "flags.hexworld.rivers": encodeBytes(this.#riverEdits),
+        "flags.hexworld.stats": this.#world.stats
+      });
+      ui.notifications.info(game.i18n.format("HEXWORLD.NotifySceneUpdated", { name: this.#editScene.name }));
+    } catch (err) {
+      console.error(err);
+      ui.notifications.error(game.i18n.localize("HEXWORLD.ErrGenerate"));
+    } finally {
+      target.disabled = false;
+    }
   }
 
   static async #onCreateScene(_event, target) {

@@ -37,14 +37,75 @@ export function computeTemperature(grid, elev, sea, climateKey) {
 }
 
 /**
- * Moisture in [0,1]: fBm base + bonus near any water body (BFS distance),
- * scaled by the user multiplier.
- * @param {Uint8Array} isWater 1 for ocean/lake cells
+ * Prevailing zonal wind per latitude band, in row direction (+1 = the wind
+ * blows toward +x / east, -1 = toward -x / west). Three bands like a toy
+ * Earth: westerlies, easterlies (trades), westerlies.
  */
-export function computeMoisture(grid, rng, isWater, multiplier) {
+export function windDirFor(latFrac) {
+  if (latFrac < 1 / 3) return 1;
+  if (latFrac < 2 / 3) return -1;
+  return 1;
+}
+
+/**
+ * Algo v2 rain shadow: sweep each row along the prevailing wind carrying an
+ * air-humidity budget. Water recharges it; land drains it slowly and dumps it
+ * fast on upslopes (orographic precipitation) — so the lee side of a mountain
+ * range receives little rain. Returns per-cell rainfall in [0,1] (normalized
+ * by a high land quantile so the multiplier keeps meaning).
+ */
+function computeRainShadow(grid, isWater, elev, sea) {
+  const n = grid.n;
+  const rain = new Float32Array(n);
+  const relief = c => Math.max(0, (elev[c] - sea) / (1 - sea || 1));
+
+  for (let i = 0; i < grid.rows; i++) {
+    const dir = windDirFor(grid.rows > 1 ? i / (grid.rows - 1) : 0.5);
+    let humidity = 0.7; // offshore air entering the map
+    let prevRelief = 0;
+    const j0 = dir > 0 ? 0 : grid.cols - 1;
+    for (let s = 0; s < grid.cols; s++) {
+      const j = j0 + dir * s;
+      const c = grid.index(i, j);
+      if (isWater[c]) {
+        humidity = Math.min(1, humidity + 0.30);
+        rain[c] = 0.6;
+        prevRelief = 0;
+        continue;
+      }
+      const rel = relief(c);
+      const upslope = Math.max(0, rel - prevRelief);
+      const rate = Math.min(0.9, 0.07 + 2.2 * upslope + 0.10 * rel);
+      const precip = humidity * rate;
+      humidity -= precip;
+      rain[c] = precip;
+      prevRelief = rel;
+    }
+  }
+
+  // Normalize by the 90th percentile of land rainfall so the field spans [0,1].
+  const land = [];
+  for (let c = 0; c < n; c++) if (!isWater[c]) land.push(rain[c]);
+  land.sort((a, b) => a - b);
+  const p90 = land.length ? land[Math.floor(land.length * 0.9)] || 1 : 1;
+  for (let c = 0; c < n; c++) rain[c] = Math.min(1, rain[c] / p90);
+  return rain;
+}
+
+/**
+ * Moisture in [0,1]: fBm base + bonus near any water body (BFS distance),
+ * scaled by the user multiplier. With opts.algo >= 2 the dominant term is
+ * orographic rainfall (rain shadow) instead of pure noise.
+ * @param {Uint8Array} isWater 1 for ocean/lake cells
+ * @param {{algo?: number, elev?: Float32Array, sea?: number}|null} opts
+ */
+export function computeMoisture(grid, rng, isWater, multiplier, opts = null) {
   const n = grid.n;
   const noise = new Simplex2(rng);
   const maxDim = Math.max(grid.pixelWidth, grid.pixelHeight);
+  const rain = (opts?.algo ?? 1) >= 2 && opts.elev
+    ? computeRainShadow(grid, isWater, opts.elev, opts.sea)
+    : null;
 
   // Multi-source BFS distance (in cells) to the nearest water, capped.
   const CAP = 10;
@@ -65,7 +126,13 @@ export function computeMoisture(grid, rng, isWater, multiplier) {
     const nx = grid.cx[c] / maxDim, ny = grid.cy[c] / maxDim;
     const base = (fbm(noise, nx * 3.0, ny * 3.0, { octaves: 4 }) + 1) / 2;
     const waterBonus = Math.max(0, (CAP - dist[c]) / CAP) * 0.35;
-    let m = (0.55 * base + 0.15 + waterBonus) * multiplier;
+    let m;
+    if (rain) {
+      // Rainfall dominates; noise adds local variety and coasts stay moist.
+      m = (0.55 * rain[c] + 0.20 * base + 0.08 + waterBonus * 0.55) * multiplier;
+    } else {
+      m = (0.55 * base + 0.15 + waterBonus) * multiplier;
+    }
     moist[c] = Math.min(1, Math.max(0, m));
   }
   return moist;

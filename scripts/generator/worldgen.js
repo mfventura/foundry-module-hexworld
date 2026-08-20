@@ -52,9 +52,13 @@ export function buildBase(params) {
 
   // Independent RNG streams per stage so tweaking one slider (e.g. moisture)
   // never reshuffles unrelated stages of the same seed.
-  const elevBase = buildHeightmap(grid, makeRng(params.seed + ":elev"), params.template);
+  // params.algo versions the pipeline: worlds re-derive from flags forever, so
+  // algorithm improvements only apply to algo >= 2 worlds (old scenes keep
+  // their exact terrain). Missing algo (pre-0.7.0 scenes) means 1.
+  const algo = params.algo ?? 1;
+  const elevBase = buildHeightmap(grid, makeRng(params.seed + ":elev"), params.template, algo);
   const sea = seaLevelFor(elevBase, params.waterFraction);
-  return { params, grid, elevBase, sea };
+  return { params, grid, elevBase, sea, algo };
 }
 
 /**
@@ -84,7 +88,9 @@ export function deriveWorld(base, edits, overrides = null, riverEdits = null) {
 
   const { isOcean, isLake, isWater, filled } = computeHydrology(grid, elev, sea);
   const temp = computeTemperature(grid, elev, sea, params.climate);
-  const moist = computeMoisture(grid, makeRng(params.seed + ":moist"), isWater, params.moisture);
+  const moist = computeMoisture(grid, makeRng(params.seed + ":moist"), isWater, params.moisture, {
+    algo: base.algo ?? 1, elev, sea
+  });
   const { flowTo, flux } = computeFlux(grid, filled, isOcean, isLake, moist);
   const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity, riverEdits);
 

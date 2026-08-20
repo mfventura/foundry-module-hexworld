@@ -82,11 +82,54 @@ function tracePoly(ctx, flat) {
   ctx.closePath();
 }
 
-function drawCells(ctx, world) {
+/** Piecewise-linear color ramp over [0,1]. Stops: [t, [r,g,b]]. */
+function ramp(stops, t) {
+  t = Math.max(0, Math.min(1, t));
+  for (let k = 1; k < stops.length; k++) {
+    if (t <= stops[k][0]) {
+      const [t0, c0] = stops[k - 1];
+      const [t1, c1] = stops[k];
+      return lerpRgb(c0, c1, (t - t0) / (t1 - t0 || 1));
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+
+const HEIGHT_LAND = [
+  [0, [77, 129, 96]], [0.3, [151, 169, 98]], [0.55, [196, 172, 108]],
+  [0.75, [153, 110, 79]], [0.9, [190, 190, 190]], [1, [245, 245, 245]]
+];
+const TEMP_RAMP = [
+  [0, [34, 60, 138]], [0.35, [120, 170, 220]], [0.5, [235, 235, 225]],
+  [0.7, [245, 170, 80]], [1, [190, 40, 30]]
+];
+const MOIST_RAMP = [
+  [0, [150, 110, 60]], [0.4, [200, 190, 120]], [0.7, [90, 160, 100]], [1, [30, 100, 175]]
+];
+
+/** False-color views: raw pipeline fields for inspection while editing. */
+function cellColorDebug(world, c, mode) {
+  const { elev, sea, temp, moist, isWater } = world;
+  if (mode === "height") {
+    if (elev[c] < sea) {
+      const depth = Math.max(0, Math.min(1, (sea - elev[c]) / (sea || 1)));
+      return css(lerpRgb([90, 140, 190], [15, 35, 70], depth));
+    }
+    return css(ramp(HEIGHT_LAND, (elev[c] - sea) / (1 - sea || 1)));
+  }
+  if (mode === "temp") return css(ramp(TEMP_RAMP, (temp[c] + 25) / 60));
+  if (mode === "moist") {
+    if (isWater[c]) return css([40, 70, 110]);
+    return css(ramp(MOIST_RAMP, moist[c]));
+  }
+  return "#000";
+}
+
+function drawCells(ctx, world, mode) {
   const { grid } = world;
-  const shade = computeShade(world);
+  const shade = mode === "terrain" ? computeShade(world) : null;
   for (let c = 0; c < grid.n; c++) {
-    const color = cellColor(world, c, shade[c]);
+    const color = mode === "terrain" ? cellColor(world, c, shade[c]) : cellColorDebug(world, c, mode);
     tracePoly(ctx, grid.polys[c]);
     ctx.fillStyle = color;
     // Stroke with the fill color to hide antialiasing seams between cells.
@@ -158,8 +201,11 @@ function drawCoast(ctx, world) {
 
 /**
  * Render the world into a canvas at the given scale.
+ * @param {string} mode "terrain" (default) or a false-color debug view:
+ *   "height" | "temp" | "moist". Debug views keep the coastline (and rivers
+ *   on the height view) for orientation.
  */
-export function renderWorld(world, canvas, scale = 1) {
+export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   const g = world.grid;
   canvas.width = Math.max(1, Math.ceil(g.pixelWidth * scale));
   canvas.height = Math.max(1, Math.ceil(g.pixelHeight * scale));
@@ -168,8 +214,8 @@ export function renderWorld(world, canvas, scale = 1) {
   ctx.scale(scale, scale);
   ctx.fillStyle = css(DEEP_OCEAN);
   ctx.fillRect(0, 0, g.pixelWidth, g.pixelHeight);
-  drawCells(ctx, world);
-  drawRivers(ctx, world);
+  drawCells(ctx, world, mode);
+  if (mode === "terrain" || mode === "height") drawRivers(ctx, world);
   drawCoast(ctx, world);
   ctx.restore();
   return canvas;
