@@ -14,7 +14,8 @@ import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString, makeRng } from "../lib/random.js";
 import { SITE, generateSettlements, routeRoad } from "../generator/sites.js";
-import { SITE_TYPES } from "../canvas/brush-hud.js";
+import { siteTypeContext } from "../canvas/brush-hud.js";
+import { configuredSiteIcons } from "../render/site-icons.js";
 import {
   NO_OVERRIDE, encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes
@@ -170,11 +171,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       active: id === this.#brushBiome
     }));
 
-    const siteTypes = SITE_TYPES.map(t => ({
-      ...t,
-      label: game.i18n.localize(`HEXWORLD.${t.key}`),
-      active: t.id === this.#brushSite
-    }));
+    const siteTypes = siteTypeContext(this.#brushSite);
 
     return {
       p, gridTypes, templates, climates, biomeSwatches, siteTypes,
@@ -355,7 +352,13 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const box = this.element.querySelector(".hw-preview");
     const maxW = Math.max(300, (box?.clientWidth ?? 640) - 8);
     this.#lastScale = previewScale(this.#world, maxW, 540);
+    this.#world.siteIcons = configuredSiteIcons();
     renderWorld(this.#world, canvas, this.#lastScale, this.#viewMode);
+  }
+
+  /** Re-render the open instance (icon settings changed). */
+  static repaintPreview() {
+    if (this.#instance?.rendered) this.#instance.render();
   }
 
   /* Brush cursor overlay + cell inspector, both fed by canvas pointermove. */

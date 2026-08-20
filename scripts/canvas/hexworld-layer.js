@@ -19,6 +19,7 @@ import {
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 import { cellIndexAt } from "../ui/cell-info.js";
+import { configuredSiteIcons } from "../render/site-icons.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
@@ -171,6 +172,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.world.sites = this.sites;
       this.world.roads = this.roads;
+      this.world.siteIcons = configuredSiteIcons();
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
       // A rebuild while the layer is active (sea-level change, remote edit)
@@ -329,6 +331,14 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
     this.world.sites = this.sites;
     this.world.roads = this.roads;
+    this.world.siteIcons = configuredSiteIcons();
+    this.#mesh?.draw(this.world, this.viewMode);
+  }
+
+  /** Repaint with fresh settings (icon changes) without re-deriving. */
+  repaint() {
+    if (!this.world) return;
+    this.world.siteIcons = configuredSiteIcons();
     this.#mesh?.draw(this.world, this.viewMode);
   }
 

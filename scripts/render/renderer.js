@@ -5,6 +5,7 @@
  */
 
 import { B, BIOME_COLORS } from "../generator/biomes.js";
+import { SITE_GLYPHS, SITE_STYLE, DEFAULT_SITE_ICONS } from "./site-icons.js";
 
 const DEEP_OCEAN = [30, 61, 96];
 const SHALLOW_OCEAN = [77, 129, 174];
@@ -189,61 +190,36 @@ function drawRoads(ctx, world) {
   ctx.setLineDash([]);
 }
 
-/** Settlement and POI markers, drawn above everything else. */
+/**
+ * Settlement and POI markers: a round badge plus the SAME Font Awesome glyph
+ * shown in the editor palette (world.siteIcons carries the configured icon
+ * names; DEFAULT_SITE_ICONS is the fallback outside a Foundry client).
+ */
 function drawSites(ctx, world) {
   const { grid, sites } = world;
   if (!sites) return;
   const s = grid.size;
-  ctx.lineWidth = Math.max(1.5, s * 0.05);
+  const icons = world.siteIcons ?? DEFAULT_SITE_ICONS;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   for (let c = 0; c < grid.n; c++) {
     const t = sites[c];
     if (!t) continue;
+    const style = SITE_STYLE[t];
+    const glyph = SITE_GLYPHS[icons[t]] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]];
+    if (!style || !glyph) continue;
     const x = grid.cx[c], y = grid.cy[c];
-    ctx.strokeStyle = "#2b2118";
-    if (t === 1) { // village: small dot
-      ctx.fillStyle = "#f3e7c8";
-      ctx.beginPath();
-      ctx.arc(x, y, s * 0.18, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
-    } else if (t === 2) { // city: double ring
-      ctx.fillStyle = "#f0cf6d";
-      ctx.beginPath();
-      ctx.arc(x, y, s * 0.3, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(x, y, s * 0.14, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (t === 3) { // dungeon: dark inverted triangle
-      ctx.fillStyle = "#33303b";
-      ctx.strokeStyle = "#d9d4c8";
-      ctx.beginPath();
-      ctx.moveTo(x - s * 0.24, y - s * 0.18);
-      ctx.lineTo(x + s * 0.24, y - s * 0.18);
-      ctx.lineTo(x, y + s * 0.26);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-    } else if (t === 4) { // temple: cross
-      ctx.strokeStyle = "#2b2118";
-      ctx.fillStyle = "#efe9dc";
-      const w = s * 0.09, l = s * 0.28;
-      ctx.beginPath();
-      ctx.rect(x - w, y - l, w * 2, l * 2);
-      ctx.rect(x - l * 0.75, y - l * 0.3, l * 1.5, w * 2);
-      ctx.fill(); ctx.stroke();
-    } else if (t === 5) { // ruin: broken square outline
-      ctx.strokeStyle = "#5d564b";
-      ctx.lineWidth = Math.max(1.5, s * 0.07);
-      const r = s * 0.2;
-      ctx.beginPath();
-      ctx.moveTo(x - r, y - r * 0.2);
-      ctx.lineTo(x - r, y + r);
-      ctx.lineTo(x + r, y + r);
-      ctx.lineTo(x + r, y - r * 0.4);
-      ctx.moveTo(x - r * 0.5, y - r);
-      ctx.lineTo(x + r * 0.3, y - r);
-      ctx.stroke();
-      ctx.lineWidth = Math.max(1.5, s * 0.05);
-    }
+    const r = s * 0.32 * style.scale;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = style.badge;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, s * 0.045);
+    ctx.strokeStyle = style.ring;
+    ctx.stroke();
+    ctx.fillStyle = style.glyph;
+    ctx.font = `900 ${Math.round(r * 1.1)}px "Font Awesome 6 Pro", "Font Awesome 6 Free", sans-serif`;
+    ctx.fillText(glyph.glyph, x, y + r * 0.04);
   }
 }
 

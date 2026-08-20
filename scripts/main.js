@@ -9,6 +9,7 @@ import { createSceneFromWorld } from "./scene/scene-builder.js";
 import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides } from "./lib/codec.js";
 import { renderWorld } from "./render/renderer.js";
 import { HexWorldLayer } from "./canvas/hexworld-layer.js";
+import { SITE_GLYPHS, DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
 
 Hooks.once("init", () => {
   game.settings.register("hexworld", "lastParams", {
@@ -17,6 +18,27 @@ Hooks.once("init", () => {
     type: Object,
     default: null
   });
+
+  // Per-site-type map icons, shown in Foundry's Configure Settings under the
+  // module. World scope: the GM picks, every client renders the same markers.
+  const iconChoices = Object.fromEntries(
+    Object.entries(SITE_GLYPHS).map(([name, { label }]) => [name, label])
+  );
+  for (const [type, key] of Object.entries(SITE_ICON_SETTINGS)) {
+    game.settings.register("hexworld", key, {
+      name: `HEXWORLD.Setting${key.charAt(0).toUpperCase()}${key.slice(1)}`,
+      hint: "HEXWORLD.SettingIconHint",
+      scope: "world",
+      config: true,
+      type: String,
+      default: DEFAULT_SITE_ICONS[type],
+      choices: iconChoices,
+      onChange: () => {
+        canvas.hexworld?.repaint();
+        HexWorldGeneratorApp.repaintPreview();
+      }
+    });
+  }
 
   CONFIG.Canvas.layers.hexworld = {
     layerClass: HexWorldLayer,

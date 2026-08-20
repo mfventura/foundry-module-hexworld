@@ -6,17 +6,29 @@
 
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { SITE } from "../generator/sites.js";
+import { configuredSiteIcons } from "../render/site-icons.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
 
 export const SITE_TYPES = [
-  { id: SITE.VILLAGE, icon: "fa-solid fa-house", key: "SiteVillage" },
-  { id: SITE.CITY, icon: "fa-solid fa-city", key: "SiteCity" },
-  { id: SITE.DUNGEON, icon: "fa-solid fa-dungeon", key: "SiteDungeon" },
-  { id: SITE.TEMPLE, icon: "fa-solid fa-place-of-worship", key: "SiteTemple" },
-  { id: SITE.RUIN, icon: "fa-solid fa-archway", key: "SiteRuin" },
-  { id: SITE.NONE, icon: "fa-solid fa-eraser", key: "SiteErase" }
+  { id: SITE.VILLAGE, key: "SiteVillage" },
+  { id: SITE.CITY, key: "SiteCity" },
+  { id: SITE.DUNGEON, key: "SiteDungeon" },
+  { id: SITE.TEMPLE, key: "SiteTemple" },
+  { id: SITE.RUIN, key: "SiteRuin" },
+  { id: SITE.NONE, key: "SiteErase", icon: "fa-solid fa-eraser" }
 ];
+
+/** Palette entries with the CONFIGURED icon per type (matches the map). */
+export function siteTypeContext(activeId) {
+  const icons = configuredSiteIcons();
+  return SITE_TYPES.map(t => ({
+    ...t,
+    icon: t.icon ?? `fa-solid ${icons[t.id]}`,
+    label: game.i18n.localize(`HEXWORLD.${t.key}`),
+    active: t.id === activeId
+  }));
+}
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -52,11 +64,7 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       viewMode: this.layer.viewMode,
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
-      siteTypes: SITE_TYPES.map(t => ({
-        ...t,
-        label: game.i18n.localize(`HEXWORLD.${t.key}`),
-        active: this.layer.brush.site === t.id
-      }))
+      siteTypes: siteTypeContext(this.layer.brush.site)
     };
   }
 
