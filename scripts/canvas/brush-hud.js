@@ -62,6 +62,7 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       radius: this.layer.brush.radius,
       strength: this.layer.brush.strength,
       viewMode: this.layer.viewMode,
+      showLabels: this.layer.showLabels,
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
       siteTypes: siteTypeContext(this.layer.brush.site)
@@ -103,6 +104,9 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const viewSel = this.element.querySelector("select[name=viewMode]");
     viewSel?.addEventListener("change", () => this.layer.setViewMode(viewSel.value));
+
+    const labelsChk = this.element.querySelector("input[name=showLabels]");
+    labelsChk?.addEventListener("change", () => this.layer.setShowLabels(labelsChk.checked));
 
     this.element.querySelector(".hw-sea-btn")?.addEventListener("click", () => this.#openSeaDialog());
 

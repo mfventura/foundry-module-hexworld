@@ -14,6 +14,7 @@ import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString, makeRng } from "../lib/random.js";
 import { SITE, generateSettlements, routeRoad } from "../generator/sites.js";
+import { generateNames, i18nNamePatterns, nameKeyAt } from "../generator/names.js";
 import { siteTypeContext } from "../canvas/brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
 import {
@@ -44,7 +45,7 @@ const DEFAULT_PARAMS = {
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
 const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
-const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site"]);
+const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site", "rename"]);
 
 export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static #instance = null;
@@ -86,6 +87,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #sites = null;
   /** @type {Uint8Array|null} road network per cell */
   #roads = null;
+  /** @type {Record<string, string>|null} feature names */
+  #names = null;
   #routeAnchor = -1;
   #brushSite = SITE.VILLAGE;
   /** @type {object|null} derived world currently shown in the preview */
@@ -297,6 +300,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       this.#riverEdits = decodeBytes(flags.rivers ?? null, n);
       this.#sites = decodeBytes(flags.sites ?? null, n);
       this.#roads = decodeBytes(flags.roads ?? null, n);
+      this.#names = { ...(flags.names ?? {}) };
       this.#undoStack = [];
       this.#redoStack = [];
       this.#derive();
@@ -456,6 +460,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#world = deriveWorld(this.#base, this.#edits, this.#overrides, this.#riverEdits);
     this.#world.sites = this.#sites;
     this.#world.roads = this.#roads;
+    this.#world.names = this.#names ?? {};
     this.#drawPreview();
     this.#updateStats();
   }
@@ -526,6 +531,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!point) return;
     const { grid } = this.#base;
     const { radius, strength } = this.#brushSettings();
+    if (this.#tool === "rename") {
+      this.#renameAt(point); // async dialog; fire and forget
+      return;
+    }
     if (this.#tool === "site") {
       const c = this.#world ? cellIndexAt(this.#world, point.x, point.y) : -1;
       if (c < 0) return;
@@ -590,6 +599,35 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     }
   }
 
+  /** Rename (or name) the feature under the preview pointer. */
+  async #renameAt(point) {
+    if (!this.#world) return;
+    const c = cellIndexAt(this.#world, point.x, point.y);
+    if (c < 0) return;
+    const key = nameKeyAt(this.#world, this.#sites, c);
+    if (!key) {
+      ui.notifications.info(game.i18n.localize("HEXWORLD.RenameNothing"));
+      return;
+    }
+    const current = this.#names?.[key] ?? "";
+    const value = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize("HEXWORLD.RenameTitle") },
+      content: `<div class="form-group"><label>${game.i18n.localize("HEXWORLD.NameLabel")}</label>
+        <input type="text" name="featureName" value="${current.replace(/"/g, "&quot;")}" autofocus></div>`,
+      ok: {
+        label: "HEXWORLD.Save",
+        callback: (_event, button) => button.form.elements.featureName.value.trim()
+      },
+      rejectClose: false
+    });
+    if (value === null || value === undefined || value === current) return;
+    this.#names = { ...(this.#names ?? {}) };
+    if (value) this.#names[key] = value;
+    else delete this.#names[key];
+    if (this.#world) this.#world.names = this.#names;
+    this.#drawPreview();
+  }
+
   /* -------------------------------------------- */
   /*  Actions                                      */
   /* -------------------------------------------- */
@@ -630,10 +668,12 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       }
       this.#undoStack = [];
       this.#redoStack = [];
+      if (!this.#editScene) this.#names = null;
       this.#derive();
-      // Fresh worlds get their settlements right away; edited scenes keep
-      // theirs (use "Regenerate settlements" to redo them explicitly).
-      if (!this.#editScene && params.settlements > 0) this.#generateSites(params);
+      // Fresh worlds get settlements and names right away; edited scenes
+      // keep theirs and only receive names for still-unnamed features.
+      if (!this.#editScene) this.#generateSites(params);
+      else this.#ensureNames(params);
       const createBtn = this.element.querySelector("button[data-action=createScene]");
       if (createBtn) createBtn.disabled = false;
       this.#refreshEditbar();
@@ -645,7 +685,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     }
   }
 
-  /** Bake procedural settlements/POIs/roads into the editable channels. */
+  /** Bake procedural settlements/POIs/roads + fresh names into the channels. */
   #generateSites(params) {
     if (!this.#world) return;
     const rng = makeRng(params.seed + ":sites");
@@ -654,11 +694,23 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#roads = roads;
     this.#world.sites = sites;
     this.#world.roads = roads;
+    this.#names = generateNames(this.#world, sites, null, makeRng(params.seed + ":names"), i18nNamePatterns());
+    this.#world.names = this.#names;
     // Wholesale replacement is not stroke-undoable: drop stale history.
     this.#undoStack = [];
     this.#redoStack = [];
     this.#drawPreview();
     this.#refreshEditbar();
+  }
+
+  /** Add names for unnamed features only — manual renames are untouched. */
+  #ensureNames(params) {
+    if (!this.#world) return;
+    this.#names = generateNames(
+      this.#world, this.#sites, this.#names, makeRng(params.seed + ":names"), i18nNamePatterns()
+    );
+    this.#world.names = this.#names;
+    this.#drawPreview();
   }
 
   static #onRegenSites(_event, _target) {
@@ -691,6 +743,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#riverEdits = null;
     this.#sites = null;
     this.#roads = null;
+    this.#names = null;
     this.#undoStack = [];
     this.#redoStack = [];
     this.#derive();
@@ -702,7 +755,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!this.#editScene || !this.#world) return;
     target.disabled = true;
     try {
-      await this.#editScene.update({
+      // Object flags merge on update, so replace the names map wholesale:
+      // clear it first, then write the current one (if any).
+      await this.#editScene.update({ "flags.hexworld.-=names": null });
+      const update = {
         "flags.hexworld.seed": this.#world.params.seed,
         "flags.hexworld.params": this.#world.params,
         "flags.hexworld.edits": encodeEdits(this.#edits),
@@ -711,7 +767,11 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         "flags.hexworld.sites": encodeBytes(this.#sites),
         "flags.hexworld.roads": encodeBytes(this.#roads),
         "flags.hexworld.stats": this.#world.stats
-      });
+      };
+      if (this.#names && Object.keys(this.#names).length) {
+        update["flags.hexworld.names"] = this.#names;
+      }
+      await this.#editScene.update(update);
       ui.notifications.info(game.i18n.format("HEXWORLD.NotifySceneUpdated", { name: this.#editScene.name }));
     } catch (err) {
       console.error(err);

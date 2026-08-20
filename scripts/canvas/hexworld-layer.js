@@ -12,6 +12,7 @@ import { buildBase, deriveWorld } from "../generator/worldgen.js";
 import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.js";
 import { B } from "../generator/biomes.js";
 import { SITE, routeRoad } from "../generator/sites.js";
+import { nameKeyAt } from "../generator/names.js";
 import {
   encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes, NO_OVERRIDE
@@ -25,10 +26,10 @@ const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
 const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
 /** Tools that act on a single click instead of dragging an area. */
-const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site"]);
+const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site", "rename"]);
 const PAINT_TOOLS = new Set([
   "raise", "lower", "smooth", "water", "land", "mountain", "biome",
-  "site", "roadErase", ...RIVER_TOOLS, ...ROUTE_TOOLS
+  "site", "roadErase", "rename", ...RIVER_TOOLS, ...ROUTE_TOOLS
 ]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
@@ -46,6 +47,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   sites = null;
   /** @type {Uint8Array|null} road network per cell (ROAD values) */
   roads = null;
+  /** @type {Record<string, string>} feature names (sparse, from flags) */
+  names = {};
+  /** Client-local label visibility (HUD toggle). */
+  showLabels = true;
   world = null;
   brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE };
   /** First endpoint of a pending two-click road route. */
@@ -152,6 +157,15 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#routeAnchor = -1;
     this.base = this.edits = this.overrides = this.riverEdits = null;
     this.sites = this.roads = this.world = null;
+    this.names = {};
+  }
+
+  /** Attach the render-only extras (channels are attached by the callers). */
+  #attachOverlays() {
+    if (!this.world) return;
+    this.world.siteRender = siteRenderContext();
+    this.world.names = this.names;
+    this.world.showLabels = this.showLabels;
   }
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
@@ -169,10 +183,11 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
       this.sites = decodeBytes(f.sites ?? null, this.base.grid.n);
       this.roads = decodeBytes(f.roads ?? null, this.base.grid.n);
+      this.names = { ...(f.names ?? {}) };
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.world.sites = this.sites;
       this.world.roads = this.roads;
-      this.world.siteRender = siteRenderContext();
+      this.#attachOverlays();
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
       // If the FA face was not rasterizable yet, repaint once fonts settle so
@@ -276,6 +291,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const x = point.x - d.sceneX;
     const y = point.y - d.sceneY;
     const tool = this.activeTool;
+    if (tool === "rename") {
+      this.#renameAt(x, y); // async dialog; fire and forget
+      return;
+    }
     if (tool === "site") {
       const c = cellIndexAt(this.world, x, y);
       if (c < 0) return;
@@ -334,15 +353,21 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
     this.world.sites = this.sites;
     this.world.roads = this.roads;
-    this.world.siteRender = siteRenderContext();
+    this.#attachOverlays();
     this.#mesh?.draw(this.world, this.viewMode);
   }
 
-  /** Repaint with fresh settings (icon changes) without re-deriving. */
+  /** Repaint with fresh settings/names/labels without re-deriving. */
   repaint() {
     if (!this.world) return;
-    this.world.siteRender = siteRenderContext();
+    this.#attachOverlays();
     this.#mesh?.draw(this.world, this.viewMode);
+  }
+
+  /** HUD toggle: show or hide the name labels (client-local). */
+  setShowLabels(show) {
+    this.showLabels = !!show;
+    this.repaint();
   }
 
   /** Switch the false-color view; repaints without re-deriving. */
@@ -362,6 +387,41 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#persist();
   }
 
+  /** Rename (or name) the feature under the pointer via a small dialog. */
+  async #renameAt(x, y) {
+    if (!this.world) return;
+    const c = cellIndexAt(this.world, x, y);
+    if (c < 0) return;
+    const key = nameKeyAt(this.world, this.sites, c);
+    if (!key) {
+      ui.notifications.info(game.i18n.localize("HEXWORLD.RenameNothing"));
+      return;
+    }
+    const current = this.names?.[key] ?? "";
+    const value = await foundry.applications.api.DialogV2.prompt({
+      window: { title: game.i18n.localize("HEXWORLD.RenameTitle") },
+      content: `<div class="form-group"><label>${game.i18n.localize("HEXWORLD.NameLabel")}</label>
+        <input type="text" name="featureName" value="${current.replace(/"/g, "&quot;")}" autofocus></div>`,
+      ok: {
+        label: "HEXWORLD.Save",
+        callback: (_event, button) => button.form.elements.featureName.value.trim()
+      },
+      rejectClose: false
+    });
+    if (value === null || value === undefined || value === current) return;
+    this.names = { ...this.names };
+    let update;
+    if (value) {
+      this.names[key] = value;
+      update = { [`flags.hexworld.names.${key}`]: value };
+    } else {
+      delete this.names[key];
+      update = { [`flags.hexworld.names.-=${key}`]: null };
+    }
+    this.repaint();
+    await canvas.scene?.update(update, { hexworldLocal: true });
+  }
+
   /* -------------------------------------------- */
   /*  Persistence and public actions               */
   /* -------------------------------------------- */
@@ -369,14 +429,19 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   async #persist() {
     const scene = canvas.scene;
     if (!scene || !this.world) return;
-    await scene.update({
+    const update = {
       "flags.hexworld.edits": encodeEdits(this.edits),
       "flags.hexworld.biomes": encodeOverrides(this.overrides),
       "flags.hexworld.rivers": encodeBytes(this.riverEdits),
       "flags.hexworld.sites": encodeBytes(this.sites),
       "flags.hexworld.roads": encodeBytes(this.roads),
       "flags.hexworld.stats": this.world.stats
-    }, { hexworldLocal: true });
+    };
+    // Object flags merge on update: adding keys is safe, but clearing the
+    // whole map (reset) needs the explicit deletion syntax.
+    if (this.names && Object.keys(this.names).length) update["flags.hexworld.names"] = this.names;
+    else update["flags.hexworld.-=names"] = null;
+    await scene.update(update, { hexworldLocal: true });
   }
 
   /** Write a stroke's cell values into its channel; returns the inverse stroke. */
@@ -419,6 +484,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.riverEdits = null;
     this.sites = null;
     this.roads = null;
+    this.names = {};
     this.#undoStack = [];
     this.#redoStack = [];
     this.#refresh();

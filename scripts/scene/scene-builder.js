@@ -48,6 +48,7 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         sites: encodeBytes(world.sites ?? null),
         roads: encodeBytes(world.roads ?? null),
         sitesFormat: "u8",
+        names: world.names && Object.keys(world.names).length ? world.names : null,
         stats: world.stats
       }
     }

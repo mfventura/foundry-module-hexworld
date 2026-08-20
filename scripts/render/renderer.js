@@ -6,6 +6,7 @@
 
 import { B, BIOME_COLORS } from "../generator/biomes.js";
 import { SITE_GLYPHS, SITE_STYLE, DEFAULT_SITE_ICONS } from "./site-icons.js";
+import { computeLabelAnchors } from "../generator/names.js";
 
 const DEEP_OCEAN = [30, 61, 96];
 const SHALLOW_OCEAN = [77, 129, 174];
@@ -241,6 +242,52 @@ function drawSites(ctx, world) {
 }
 
 /**
+ * Feature labels: names from world.names drawn with a light halo. Settlement
+ * labels sit under their marker; water names are italic steel blue at the
+ * feature's anchor cell.
+ */
+function drawLabels(ctx, world) {
+  const names = world.names;
+  if (!names || world.showLabels === false) return;
+  const { grid } = world;
+  const s = grid.size;
+  const anchors = computeLabelAnchors(world, world.sites ?? null);
+  ctx.textAlign = "center";
+  ctx.lineJoin = "round";
+
+  const halo = (text, x, y) => {
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+  };
+
+  ctx.textBaseline = "top";
+  for (const a of anchors.sites) {
+    const name = names[a.key];
+    if (!name) continue;
+    const size = a.type === 2 ? s * 0.4 : (a.type === 1 ? s * 0.32 : s * 0.28);
+    ctx.font = `${a.type === 2 ? "bold " : ""}${Math.round(size)}px "Signika", sans-serif`;
+    ctx.lineWidth = Math.max(2, size * 0.24);
+    ctx.strokeStyle = "rgba(245, 240, 225, 0.85)";
+    ctx.fillStyle = "#241c12";
+    halo(name, grid.cx[a.cell], grid.cy[a.cell] + s * 0.42);
+  }
+
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#1d4e79";
+  ctx.strokeStyle = "rgba(235, 242, 248, 0.8)";
+  for (const group of [anchors.rivers, anchors.waters]) {
+    for (const a of group) {
+      const name = names[a.key];
+      if (!name) continue;
+      const size = a.isSea ? s * 0.42 : s * 0.32;
+      ctx.font = `italic ${Math.round(size)}px "Signika", serif`;
+      ctx.lineWidth = Math.max(2, size * 0.24);
+      halo(name, grid.cx[a.cell], grid.cy[a.cell]);
+    }
+  }
+}
+
+/**
  * Coastline: stroke every polygon edge shared between a land cell and a water
  * cell. The neighbor across an edge is found as the one whose center is
  * closest to the edge midpoint — exact enough for regular grids.
@@ -300,6 +347,7 @@ export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   if (mode === "terrain" || mode === "height") {
     drawRoads(ctx, world);
     drawSites(ctx, world);
+    drawLabels(ctx, world);
   }
   ctx.restore();
   return canvas;
