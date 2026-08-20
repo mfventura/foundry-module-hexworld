@@ -19,7 +19,7 @@ import {
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 import { cellIndexAt } from "../ui/cell-info.js";
-import { configuredSiteIcons } from "../render/site-icons.js";
+import { siteRenderContext } from "../render/site-icons.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
@@ -172,9 +172,12 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.world.sites = this.sites;
       this.world.roads = this.roads;
-      this.world.siteIcons = configuredSiteIcons();
+      this.world.siteRender = siteRenderContext();
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world, this.viewMode);
+      // If the FA face was not rasterizable yet, repaint once fonts settle so
+      // site glyphs never stay missing on the first draw.
+      document.fonts?.ready?.then?.(() => this.repaint());
       // A rebuild while the layer is active (sea-level change, remote edit)
       // closed the HUD in #destroyState — bring it back.
       if (this.active && game.user.isGM) {
@@ -331,14 +334,14 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
     this.world.sites = this.sites;
     this.world.roads = this.roads;
-    this.world.siteIcons = configuredSiteIcons();
+    this.world.siteRender = siteRenderContext();
     this.#mesh?.draw(this.world, this.viewMode);
   }
 
   /** Repaint with fresh settings (icon changes) without re-deriving. */
   repaint() {
     if (!this.world) return;
-    this.world.siteIcons = configuredSiteIcons();
+    this.world.siteRender = siteRenderContext();
     this.#mesh?.draw(this.world, this.viewMode);
   }
 

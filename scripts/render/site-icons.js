@@ -69,3 +69,70 @@ export function configuredSiteIcons() {
   }
   return out;
 }
+
+/* -------------------------------------------- */
+/*  Runtime glyph/font resolution (browser only) */
+/* -------------------------------------------- */
+
+let fontSpec = null;
+const glyphCache = new Map();
+
+/**
+ * The EXACT Font Awesome family/weight this Foundry build uses, read from
+ * a live `.fa-solid` element — canvas fillText needs the real family name,
+ * which changes across Foundry/FA versions.
+ */
+export function faFontSpec() {
+  if (fontSpec) return fontSpec;
+  let family = "\"Font Awesome 6 Pro\", \"Font Awesome 6 Free\"";
+  let weight = "900";
+  try {
+    const el = document.createElement("i");
+    el.className = "fa-solid";
+    el.style.position = "absolute";
+    el.style.visibility = "hidden";
+    document.body.appendChild(el);
+    const cs = getComputedStyle(el);
+    if (cs.fontFamily) family = cs.fontFamily;
+    if (cs.fontWeight) weight = cs.fontWeight;
+    el.remove();
+  } catch (_err) { /* headless */ }
+  fontSpec = { family, weight };
+  return fontSpec;
+}
+
+/**
+ * Glyph character for an icon, read from Foundry's own stylesheet
+ * (::before content) so codepoints can never drift from the packaged FA
+ * version; the curated table is only the headless fallback.
+ */
+export function glyphChar(name) {
+  if (glyphCache.has(name)) return glyphCache.get(name);
+  let ch = SITE_GLYPHS[name]?.glyph ?? "";
+  try {
+    const el = document.createElement("i");
+    el.className = `fa-solid ${name}`;
+    el.style.position = "absolute";
+    el.style.visibility = "hidden";
+    document.body.appendChild(el);
+    const content = getComputedStyle(el, "::before").content;
+    el.remove();
+    if (content && content !== "none" && content !== "normal") {
+      const stripped = content.replace(/^["']|["']$/g, "");
+      if (stripped) ch = stripped;
+    }
+  } catch (_err) { /* headless */ }
+  glyphCache.set(name, ch);
+  return ch;
+}
+
+/** Everything drawSites needs to render markers on this client. */
+export function siteRenderContext() {
+  const icons = configuredSiteIcons();
+  const { family, weight } = faFontSpec();
+  const glyphs = {};
+  for (const [type, name] of Object.entries(icons)) glyphs[type] = glyphChar(name);
+  // Nudge the face into the font cache so 2D canvas can rasterize it.
+  try { document.fonts?.load(`${weight} 24px ${family.split(",")[0]}`, Object.values(glyphs).join("")); } catch (_err) { /* ok */ }
+  return { glyphs, fontFamily: family, fontWeight: weight };
+}

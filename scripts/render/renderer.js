@@ -199,14 +199,18 @@ function drawSites(ctx, world) {
   const { grid, sites } = world;
   if (!sites) return;
   const s = grid.size;
-  const icons = world.siteIcons ?? DEFAULT_SITE_ICONS;
+  // world.siteRender is prepared per-client (real FA family + glyphs read
+  // from Foundry's CSS); the curated table is the headless fallback.
+  const rc = world.siteRender ?? null;
+  const family = rc?.fontFamily ?? "\"Font Awesome 6 Pro\", \"Font Awesome 6 Free\", sans-serif";
+  const weight = rc?.fontWeight ?? "900";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (let c = 0; c < grid.n; c++) {
     const t = sites[c];
     if (!t) continue;
     const style = SITE_STYLE[t];
-    const glyph = SITE_GLYPHS[icons[t]] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]];
+    const glyph = rc?.glyphs?.[t] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]]?.glyph;
     if (!style || !glyph) continue;
     const x = grid.cx[c], y = grid.cy[c];
     const r = s * 0.32 * style.scale;
@@ -218,8 +222,8 @@ function drawSites(ctx, world) {
     ctx.strokeStyle = style.ring;
     ctx.stroke();
     ctx.fillStyle = style.glyph;
-    ctx.font = `900 ${Math.round(r * 1.1)}px "Font Awesome 6 Pro", "Font Awesome 6 Free", sans-serif`;
-    ctx.fillText(glyph.glyph, x, y + r * 0.04);
+    ctx.font = `${weight} ${Math.round(r * 1.1)}px ${family}`;
+    ctx.fillText(glyph, x, y + r * 0.04);
   }
 }
 

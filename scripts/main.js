@@ -9,7 +9,8 @@ import { createSceneFromWorld } from "./scene/scene-builder.js";
 import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides } from "./lib/codec.js";
 import { renderWorld } from "./render/renderer.js";
 import { HexWorldLayer } from "./canvas/hexworld-layer.js";
-import { SITE_GLYPHS, DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
+import { DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
+import { HexWorldIconConfig } from "./ui/icon-config.js";
 
 Hooks.once("init", () => {
   game.settings.register("hexworld", "lastParams", {
@@ -19,26 +20,30 @@ Hooks.once("init", () => {
     default: null
   });
 
-  // Per-site-type map icons, shown in Foundry's Configure Settings under the
-  // module. World scope: the GM picks, every client renders the same markers.
-  const iconChoices = Object.fromEntries(
-    Object.entries(SITE_GLYPHS).map(([name, { label }]) => [name, label])
-  );
+  // Per-site-type map icons. The raw string settings are hidden (config:
+  // false) — a native <select> cannot render icons — and are edited through
+  // the visual icon-picker menu below. World scope: the GM picks, every
+  // client renders the same markers.
   for (const [type, key] of Object.entries(SITE_ICON_SETTINGS)) {
     game.settings.register("hexworld", key, {
-      name: `HEXWORLD.Setting${key.charAt(0).toUpperCase()}${key.slice(1)}`,
-      hint: "HEXWORLD.SettingIconHint",
       scope: "world",
-      config: true,
+      config: false,
       type: String,
       default: DEFAULT_SITE_ICONS[type],
-      choices: iconChoices,
       onChange: () => {
         canvas.hexworld?.repaint();
         HexWorldGeneratorApp.repaintPreview();
       }
     });
   }
+  game.settings.registerMenu("hexworld", "iconMenu", {
+    name: "HEXWORLD.IconMenuName",
+    label: "HEXWORLD.IconMenuLabel",
+    hint: "HEXWORLD.IconMenuHint",
+    icon: "fa-solid fa-icons",
+    type: HexWorldIconConfig,
+    restricted: true
+  });
 
   CONFIG.Canvas.layers.hexworld = {
     layerClass: HexWorldLayer,

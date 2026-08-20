@@ -1,0 +1,17 @@
+<div class="hw-icon-config">
+  <p class="hint">{{localize "HEXWORLD.IconMenuHint"}}</p>
+  {{#each rows}}
+  <fieldset data-type="{{type}}">
+    <legend>{{typeLabel}}</legend>
+    <div class="hw-palette">
+      {{#each options}}
+      <button type="button" class="hw-swatch hw-site-swatch{{#if active}} active{{/if}}" data-icon="{{name}}"
+              data-tooltip="{{label}}"><i class="fa-solid {{name}}"></i></button>
+      {{/each}}
+    </div>
+  </fieldset>
+  {{/each}}
+  <button type="button" class="hw-save" data-action="save">
+    <i class="fa-solid fa-floppy-disk"></i> {{localize "HEXWORLD.Save"}}
+  </button>
+</div>

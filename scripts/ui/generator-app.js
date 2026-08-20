@@ -15,7 +15,7 @@ import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString, makeRng } from "../lib/random.js";
 import { SITE, generateSettlements, routeRoad } from "../generator/sites.js";
 import { siteTypeContext } from "../canvas/brush-hud.js";
-import { configuredSiteIcons } from "../render/site-icons.js";
+import { siteRenderContext } from "../render/site-icons.js";
 import {
   NO_OVERRIDE, encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes
@@ -352,7 +352,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const box = this.element.querySelector(".hw-preview");
     const maxW = Math.max(300, (box?.clientWidth ?? 640) - 8);
     this.#lastScale = previewScale(this.#world, maxW, 540);
-    this.#world.siteIcons = configuredSiteIcons();
+    this.#world.siteRender = siteRenderContext();
     renderWorld(this.#world, canvas, this.#lastScale, this.#viewMode);
   }
 
