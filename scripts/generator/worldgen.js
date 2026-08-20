@@ -5,6 +5,7 @@
  */
 
 import { makeRng } from "../lib/random.js";
+import { NO_OVERRIDE } from "../lib/codec.js";
 import { WorldGrid } from "./grid.js";
 import { buildHeightmap, seaLevelFor } from "./heightmap.js";
 import { computeTemperature, computeMoisture } from "./climate.js";
@@ -27,7 +28,7 @@ export const MAX_CELLS = 25000;
  * @param {number} params.riverDensity 0..1
  */
 export function generateWorld(params) {
-  return deriveWorld(buildBase(params), null);
+  return deriveWorld(buildBase(params), null, null);
 }
 
 /**
@@ -57,12 +58,16 @@ export function buildBase(params) {
 }
 
 /**
- * Derive the full world (hydrology, climate, biomes) from a base plus an
- * optional per-cell elevation delta painted by the user.
+ * Derive the full world (hydrology, climate, biomes) from a base plus
+ * optional per-cell edits painted by the user: an elevation delta layer and
+ * a biome override layer. Overrides are a final layer over assignBiomes —
+ * water is always elevation-driven, so an override on a submerged cell stays
+ * latent until the cell is dry land again.
  * @param {object} base result of buildBase()
  * @param {Float32Array|null} edits elevation deltas, same length as cells
+ * @param {Uint8Array|null} overrides biome id per cell, NO_OVERRIDE = none
  */
-export function deriveWorld(base, edits) {
+export function deriveWorld(base, edits, overrides = null) {
   const { params, grid, elevBase, sea } = base;
 
   let elev = elevBase;
@@ -84,9 +89,14 @@ export function deriveWorld(base, edits) {
     isOcean, isLake, isWater,
     temp, moist, flowTo, flux, isRiver,
     riverThreshold: threshold,
-    base, edits
+    base, edits, overrides
   };
   world.biome = assignBiomes(world);
+  if (overrides) {
+    for (let c = 0; c < grid.n; c++) {
+      if (overrides[c] !== NO_OVERRIDE && !isWater[c]) world.biome[c] = overrides[c];
+    }
+  }
   world.stats = computeStats(world);
   return world;
 }

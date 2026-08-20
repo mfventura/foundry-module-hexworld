@@ -10,6 +10,25 @@ export const B = {
   TROP_RAIN: 11, TEMP_RAIN: 12, WETLAND: 13, MOUNTAIN: 14, SNOW: 15, BEACH: 16
 };
 
+/** Land biomes offered by the manual biome brush, with their i18n key suffix. */
+export const PAINTABLE_BIOMES = [
+  { id: B.GRASSLAND, key: "Grassland" },
+  { id: B.DECIDUOUS, key: "Deciduous" },
+  { id: B.TEMP_RAIN, key: "TempRain" },
+  { id: B.TAIGA, key: "Taiga" },
+  { id: B.TUNDRA, key: "Tundra" },
+  { id: B.GLACIER, key: "Glacier" },
+  { id: B.SNOW, key: "Snow" },
+  { id: B.MOUNTAIN, key: "Mountain" },
+  { id: B.COLD_DESERT, key: "ColdDesert" },
+  { id: B.HOT_DESERT, key: "HotDesert" },
+  { id: B.SAVANNA, key: "Savanna" },
+  { id: B.TROP_SEASONAL, key: "TropSeasonal" },
+  { id: B.TROP_RAIN, key: "TropRain" },
+  { id: B.WETLAND, key: "Wetland" },
+  { id: B.BEACH, key: "Beach" }
+];
+
 export const BIOME_COLORS = {
   [B.OCEAN]: "#2e5c8a",
   [B.LAKE]: "#5d8fbf",

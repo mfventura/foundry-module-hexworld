@@ -9,13 +9,14 @@
  */
 
 import { buildBase, deriveWorld } from "../generator/worldgen.js";
-import { applyBrush } from "../generator/brush.js";
-import { encodeEdits, decodeEdits } from "../lib/codec.js";
+import { applyBrush, applyBiomeBrush } from "../generator/brush.js";
+import { B } from "../generator/biomes.js";
+import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides, NO_OVERRIDE } from "../lib/codec.js";
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 
 const UNDO_LIMIT = 20;
-const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain"]);
+const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain", "biome"]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   static get layerOptions() {
@@ -24,15 +25,17 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   base = null;
   edits = null;
+  /** @type {Uint8Array|null} painted biome overrides (NO_OVERRIDE = derived) */
+  overrides = null;
   world = null;
-  brush = { radius: 3, strength: 0.06 };
+  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND };
 
   #mesh = null;
   #hud = null;
   #painting = false;
-  /** @type {Map<number, number>|null} */
+  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}|null} */
   #strokeUndo = null;
-  /** @type {Map<number, number>[]} */
+  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}[]} */
   #undoStack = [];
   #lastDerive = 0;
 
@@ -75,7 +78,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#undoStack = [];
     this.#strokeUndo = null;
     this.#painting = false;
-    this.base = this.edits = this.world = null;
+    this.base = this.edits = this.overrides = this.world = null;
   }
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
@@ -86,7 +89,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     try {
       this.base = buildBase(f.params);
       this.edits = decodeEdits(f.edits ?? null, this.base.grid.n);
-      this.world = deriveWorld(this.base, this.edits);
+      this.overrides = decodeOverrides(f.biomes ?? null, this.base.grid.n);
+      this.world = deriveWorld(this.base, this.edits, this.overrides);
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world);
     } catch (err) {
@@ -108,11 +112,18 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     return game.user.isGM && !!this.world && PAINT_TOOLS.has(this.activeTool);
   }
 
+  #beginStroke() {
+    this.#strokeUndo = {
+      channel: this.activeTool === "biome" ? "biome" : "elev",
+      cells: new Map()
+    };
+  }
+
   _onClickLeft(event) {
     if (!this.#canPaint()) return;
     const p = event.interactionData?.origin;
     if (!p) return;
-    this.#strokeUndo = new Map();
+    this.#beginStroke();
     this.#paintAt(p);
     this.#endStroke();
   }
@@ -120,7 +131,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   _onDragLeftStart(event) {
     if (!this.#canPaint()) return;
     this.#painting = true;
-    this.#strokeUndo = new Map();
+    this.#beginStroke();
     const p = event.interactionData?.origin;
     if (p) this.#paintAt(p);
   }
@@ -146,14 +157,22 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   #paintAt(point) {
     const d = canvas.dimensions;
-    this.edits ??= new Float32Array(this.base.grid.n);
-    applyBrush(this.base, this.edits, this.#strokeUndo, {
-      tool: this.activeTool,
-      radius: this.brush.radius,
-      strength: this.brush.strength,
-      x: point.x - d.sceneX,
-      y: point.y - d.sceneY
-    });
+    const x = point.x - d.sceneX;
+    const y = point.y - d.sceneY;
+    if (this.activeTool === "biome") {
+      this.overrides ??= new Uint8Array(this.base.grid.n).fill(NO_OVERRIDE);
+      applyBiomeBrush(this.base, this.overrides, this.#strokeUndo?.cells, {
+        biome: this.brush.biome, radius: this.brush.radius, x, y
+      });
+    } else {
+      this.edits ??= new Float32Array(this.base.grid.n);
+      applyBrush(this.base, this.edits, this.#strokeUndo?.cells, {
+        tool: this.activeTool,
+        radius: this.brush.radius,
+        strength: this.brush.strength,
+        x, y
+      });
+    }
     const now = performance.now();
     const interval = this.base.grid.n > 10000 ? 250 : 80;
     if (now - this.#lastDerive >= interval) {
@@ -164,12 +183,12 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   #refresh() {
     if (!this.base) return;
-    this.world = deriveWorld(this.base, this.edits);
+    this.world = deriveWorld(this.base, this.edits, this.overrides);
     this.#mesh?.draw(this.world);
   }
 
   #endStroke() {
-    if (this.#strokeUndo?.size) {
+    if (this.#strokeUndo?.cells.size) {
       this.#undoStack.push(this.#strokeUndo);
       if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
     }
@@ -187,14 +206,21 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (!scene || !this.world) return;
     await scene.update({
       "flags.hexworld.edits": encodeEdits(this.edits),
+      "flags.hexworld.biomes": encodeOverrides(this.overrides),
       "flags.hexworld.stats": this.world.stats
     }, { hexworldLocal: true });
   }
 
   undo() {
     const stroke = this.#undoStack.pop();
-    if (!stroke || !this.edits) return;
-    for (const [c, prev] of stroke) this.edits[c] = prev;
+    if (!stroke) return;
+    if (stroke.channel === "biome") {
+      if (!this.overrides) return;
+      for (const [c, prev] of stroke.cells) this.overrides[c] = prev;
+    } else {
+      if (!this.edits) return;
+      for (const [c, prev] of stroke.cells) this.edits[c] = prev;
+    }
     this.#refresh();
     this.#persist();
   }
@@ -202,6 +228,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   resetEdits() {
     if (!this.base) return;
     this.edits = null;
+    this.overrides = null;
     this.#undoStack = [];
     this.#refresh();
     this.#persist();

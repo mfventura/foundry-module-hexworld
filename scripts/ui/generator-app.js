@@ -8,10 +8,12 @@
 
 import { buildBase, deriveWorld, MAX_CELLS } from "../generator/worldgen.js";
 import { TEMPLATES } from "../generator/heightmap.js";
-import { applyBrush } from "../generator/brush.js";
+import { applyBrush, applyBiomeBrush } from "../generator/brush.js";
+import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString } from "../lib/random.js";
+import { NO_OVERRIDE } from "../lib/codec.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -46,15 +48,18 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #base = null;
   /** @type {Float32Array|null} painted elevation deltas */
   #edits = null;
+  /** @type {Uint8Array|null} painted biome overrides (NO_OVERRIDE = derived) */
+  #overrides = null;
   /** @type {object|null} derived world currently shown in the preview */
   #world = null;
   #lastScale = 1;
 
   #tool = "raise";
+  #brushBiome = PAINTABLE_BIOMES[0].id;
   #painting = false;
-  /** @type {Map<number, number>|null} cell -> previous delta, for the active stroke */
+  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}|null} */
   #strokeUndo = null;
-  /** @type {Map<number, number>[]} */
+  /** @type {{channel: "elev"|"biome", cells: Map<number, number>}[]} */
   #undoStack = [];
   #lastDerive = 0;
 
@@ -108,7 +113,14 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       { value: "planet", label: game.i18n.localize("HEXWORLD.ClimatePlanet") }
     ].map(o => ({ ...o, selected: o.value === p.climate }));
 
-    return { p, gridTypes, templates, climates };
+    const biomeSwatches = PAINTABLE_BIOMES.map(({ id, key }) => ({
+      id,
+      color: BIOME_COLORS[id],
+      label: game.i18n.localize(`HEXWORLD.Biome${key}`),
+      active: id === this.#brushBiome
+    }));
+
+    return { p, gridTypes, templates, climates, biomeSwatches };
   }
 
   _onRender(_context, _options) {
@@ -139,6 +151,18 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     for (const btn of root.querySelectorAll(".hw-editbar [data-tool]")) {
       btn.addEventListener("click", () => {
         this.#tool = btn.dataset.tool;
+        this.#refreshToolButtons();
+      });
+    }
+
+    // Biome palette: picking a color also switches to the biome tool.
+    for (const btn of root.querySelectorAll(".hw-palette .hw-swatch")) {
+      btn.addEventListener("click", () => {
+        this.#brushBiome = Number(btn.dataset.biome);
+        this.#tool = "biome";
+        for (const b of root.querySelectorAll(".hw-palette .hw-swatch")) {
+          b.classList.toggle("active", b === btn);
+        }
         this.#refreshToolButtons();
       });
     }
@@ -224,13 +248,18 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const ready = !!this.#base;
     bar.classList.toggle("disabled", !ready);
     for (const el of bar.querySelectorAll("button, input")) el.disabled = !ready;
+    const palette = this.element.querySelector(".hw-palette-bar");
+    if (palette) {
+      palette.classList.toggle("disabled", !ready);
+      for (const el of palette.querySelectorAll("button")) el.disabled = !ready;
+    }
     const undoBtn = bar.querySelector("button[data-action=undoEdit]");
     if (undoBtn) undoBtn.disabled = !ready || !this.#undoStack.length;
   }
 
   #derive() {
     if (!this.#base) return;
-    this.#world = deriveWorld(this.#base, this.#edits);
+    this.#world = deriveWorld(this.#base, this.#edits, this.#overrides);
     this.#drawPreview();
     this.#updateStats();
   }
@@ -262,7 +291,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     ev.preventDefault();
     ev.currentTarget.setPointerCapture(ev.pointerId);
     this.#painting = true;
-    this.#strokeUndo = new Map();
+    this.#strokeUndo = {
+      channel: this.#tool === "biome" ? "biome" : "elev",
+      cells: new Map()
+    };
     this.#applyBrush(ev);
   }
 
@@ -276,7 +308,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!this.#painting) return;
     this.#painting = false;
     try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_err) { /* already released */ }
-    if (this.#strokeUndo?.size) {
+    if (this.#strokeUndo?.cells.size) {
       this.#undoStack.push(this.#strokeUndo);
       if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
     }
@@ -289,11 +321,18 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const point = this.#canvasPoint(ev);
     if (!point) return;
     const { grid } = this.#base;
-    this.#edits ??= new Float32Array(grid.n);
     const { radius, strength } = this.#brushSettings();
-    applyBrush(this.#base, this.#edits, this.#strokeUndo, {
-      tool: this.#tool, radius, strength, x: point.x, y: point.y
-    });
+    if (this.#tool === "biome") {
+      this.#overrides ??= new Uint8Array(grid.n).fill(NO_OVERRIDE);
+      applyBiomeBrush(this.#base, this.#overrides, this.#strokeUndo?.cells, {
+        biome: this.#brushBiome, radius, x: point.x, y: point.y
+      });
+    } else {
+      this.#edits ??= new Float32Array(grid.n);
+      applyBrush(this.#base, this.#edits, this.#strokeUndo?.cells, {
+        tool: this.#tool, radius, strength, x: point.x, y: point.y
+      });
+    }
 
     // Live feedback, throttled harder on big maps where a derive is costlier.
     const now = performance.now();
@@ -334,6 +373,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       await new Promise(r => setTimeout(r, 20));
       this.#base = buildBase(params);
       this.#edits = null;
+      this.#overrides = null;
       this.#undoStack = [];
       this.#derive();
       const createBtn = this.element.querySelector("button[data-action=createScene]");
@@ -349,8 +389,14 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   static #onUndoEdit(_event, _target) {
     const stroke = this.#undoStack.pop();
-    if (!stroke || !this.#edits) return;
-    for (const [c, prev] of stroke) this.#edits[c] = prev;
+    if (!stroke) return;
+    if (stroke.channel === "biome") {
+      if (!this.#overrides) return;
+      for (const [c, prev] of stroke.cells) this.#overrides[c] = prev;
+    } else {
+      if (!this.#edits) return;
+      for (const [c, prev] of stroke.cells) this.#edits[c] = prev;
+    }
     this.#derive();
     this.#refreshEditbar();
   }
@@ -358,6 +404,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   static #onResetEdits(_event, _target) {
     if (!this.#base) return;
     this.#edits = null;
+    this.#overrides = null;
     this.#undoStack = [];
     this.#derive();
     this.#refreshEditbar();

@@ -190,6 +190,53 @@
   text-align: right;
 }
 
+#hexworld-brush-hud .hw-hud-subtitle {
+  margin-top: 6px;
+  font-weight: bold;
+  opacity: 0.85;
+}
+
+#hexworld-brush-hud .hw-palette,
+.hexworld-app .hw-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.hexworld-app .hw-palette-bar {
+  margin: 2px 0 4px;
+}
+
+.hexworld-app .hw-palette-bar.disabled {
+  opacity: 0.55;
+}
+
+#hexworld-brush-hud .hw-swatch,
+.hexworld-app .hw-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: var(--swatch, #333);
+  cursor: pointer;
+  line-height: 1;
+}
+
+#hexworld-brush-hud .hw-swatch.active,
+.hexworld-app .hw-swatch.active {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+#hexworld-brush-hud .hw-swatch-erase,
+.hexworld-app .hw-swatch-erase {
+  background: rgba(0, 0, 0, 0.35);
+  color: #ddd;
+  font-size: 11px;
+}
+
 /* Scenes sidebar button */
 .hexworld-open {
   width: 100%;

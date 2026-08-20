@@ -9,7 +9,7 @@
  * baked background image and are ignored by the canvas layer.
  */
 
-import { encodeEdits } from "../lib/codec.js";
+import { encodeEdits, encodeOverrides } from "../lib/codec.js";
 
 /**
  * @param {object} world  result of generateWorld()/deriveWorld()
@@ -41,6 +41,8 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         params: world.params,
         edits: encodeEdits(world.edits),
         editsFormat: "int8x100",
+        biomes: encodeOverrides(world.overrides),
+        biomesFormat: "u8",
         stats: world.stats
       }
     }

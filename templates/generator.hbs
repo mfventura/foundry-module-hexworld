@@ -119,6 +119,9 @@
       <button type="button" data-tool="mountain" data-tooltip="{{localize 'HEXWORLD.ToolMountain'}}" disabled>
         <i class="fa-solid fa-mountain"></i>
       </button>
+      <button type="button" data-tool="biome" data-tooltip="{{localize 'HEXWORLD.ToolBiome'}}" disabled>
+        <i class="fa-solid fa-palette"></i>
+      </button>
       <label>{{localize "HEXWORLD.BrushRadius"}}</label>
       <input type="range" name="brushRadius" min="1" max="8" step="1" value="3" disabled>
       <label>{{localize "HEXWORLD.BrushStrength"}}</label>
@@ -129,6 +132,14 @@
       <button type="button" data-action="resetEdits" data-tooltip="{{localize 'HEXWORLD.ResetEdits'}}" disabled>
         <i class="fa-solid fa-eraser"></i>
       </button>
+    </div>
+    <div class="hw-palette hw-palette-bar">
+      {{#each biomeSwatches}}
+      <button type="button" class="hw-swatch{{#if active}} active{{/if}}" data-biome="{{id}}"
+              data-tooltip="{{label}}" style="--swatch: {{color}}" disabled></button>
+      {{/each}}
+      <button type="button" class="hw-swatch hw-swatch-erase" data-biome="255"
+              data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}" disabled><i class="fa-solid fa-eraser"></i></button>
     </div>
     <canvas class="hw-canvas" width="640" height="480"></canvas>
     <div class="hw-stats">{{localize "HEXWORLD.NoWorld"}}</div>

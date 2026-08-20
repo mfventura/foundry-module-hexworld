@@ -65,3 +65,33 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
   }
   return touched;
 }
+
+/**
+ * Biome override brush: categorical, so every cell within the radius gets the
+ * full value (no falloff). Painting NO_OVERRIDE acts as the eraser, returning
+ * cells to their derived biome.
+ * @param {object} base  result of buildBase()
+ * @param {Uint8Array} overrides  biome id per cell (mutated)
+ * @param {Map<number, number>|null} strokeUndo  pre-stroke override per touched cell
+ * @param {object} opts
+ * @param {number} opts.biome  biome id to paint, or NO_OVERRIDE to erase
+ * @param {number} opts.radius  brush radius in cells
+ * @param {number} opts.x  world pixel x
+ * @param {number} opts.y  world pixel y
+ * @returns {number} cells touched
+ */
+export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x, y }) {
+  const { grid } = base;
+  const radiusPx = radius * grid.size;
+  const r2 = radiusPx * radiusPx;
+  let touched = 0;
+  for (let c = 0; c < grid.n; c++) {
+    const dx = grid.cx[c] - x;
+    const dy = grid.cy[c] - y;
+    if (dx * dx + dy * dy > r2) continue;
+    if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, overrides[c]);
+    overrides[c] = biome;
+    touched++;
+  }
+  return touched;
+}

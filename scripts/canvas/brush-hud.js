@@ -1,7 +1,11 @@
 /**
- * Minimal floating panel with brush radius/strength sliders, shown while the
- * HexWorld terrain layer is active. Writes straight into layer.brush.
+ * Minimal floating panel with brush radius/strength sliders and the biome
+ * palette, shown while the HexWorld terrain layer is active. Writes straight
+ * into layer.brush; clicking a swatch also activates the biome tool.
  */
+
+import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
+import { NO_OVERRIDE } from "../lib/codec.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -22,9 +26,17 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   async _prepareContext(_options) {
+    const swatches = PAINTABLE_BIOMES.map(({ id, key }) => ({
+      id,
+      color: BIOME_COLORS[id],
+      label: game.i18n.localize(`HEXWORLD.Biome${key}`),
+      active: this.layer.brush.biome === id
+    }));
     return {
       radius: this.layer.brush.radius,
-      strength: this.layer.brush.strength
+      strength: this.layer.brush.strength,
+      swatches,
+      eraserActive: this.layer.brush.biome === NO_OVERRIDE
     };
   }
 
@@ -38,6 +50,17 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       };
       range.addEventListener("input", sync);
       sync();
+    }
+
+    for (const btn of this.element.querySelectorAll(".hw-swatch")) {
+      btn.addEventListener("click", () => {
+        this.layer.brush.biome = Number(btn.dataset.biome);
+        for (const b of this.element.querySelectorAll(".hw-swatch")) {
+          b.classList.toggle("active", b === btn);
+        }
+        // Picking a color is an intent to paint biomes: switch to the tool.
+        ui.controls.activate({ tool: "biome" });
+      });
     }
   }
 }

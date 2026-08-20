@@ -10,4 +10,13 @@
     <input type="range" name="strength" min="0.02" max="0.15" step="0.01" value="{{strength}}">
     <output></output>
   </div>
+  <div class="hw-hud-subtitle">{{localize "HEXWORLD.ToolBiome"}}</div>
+  <div class="hw-palette">
+    {{#each swatches}}
+    <button type="button" class="hw-swatch{{#if active}} active{{/if}}" data-biome="{{id}}"
+            data-tooltip="{{label}}" style="--swatch: {{color}}"></button>
+    {{/each}}
+    <button type="button" class="hw-swatch hw-swatch-erase{{#if eraserActive}} active{{/if}}" data-biome="255"
+            data-tooltip="{{localize 'HEXWORLD.BiomeErase'}}"><i class="fa-solid fa-eraser"></i></button>
+  </div>
 </div>

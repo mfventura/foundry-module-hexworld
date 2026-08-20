@@ -6,7 +6,7 @@
 import { HexWorldGeneratorApp } from "./ui/generator-app.js";
 import { generateWorld, buildBase, deriveWorld } from "./generator/worldgen.js";
 import { createSceneFromWorld } from "./scene/scene-builder.js";
-import { encodeEdits, decodeEdits } from "./lib/codec.js";
+import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides } from "./lib/codec.js";
 import { renderWorld } from "./render/renderer.js";
 import { HexWorldLayer } from "./canvas/hexworld-layer.js";
 
@@ -34,6 +34,8 @@ Hooks.once("ready", () => {
     createSceneFromWorld,
     encodeEdits,
     decodeEdits,
+    encodeOverrides,
+    decodeOverrides,
     renderWorld
   };
 });
@@ -64,12 +66,13 @@ Hooks.on("getSceneControlButtons", controls => {
       water: { name: "water", order: 4, title: "HEXWORLD.ToolWater", icon: "fa-solid fa-water" },
       land: { name: "land", order: 5, title: "HEXWORLD.ToolLand", icon: "fa-solid fa-seedling" },
       mountain: { name: "mountain", order: 6, title: "HEXWORLD.ToolMountain", icon: "fa-solid fa-mountain" },
+      biome: { name: "biome", order: 7, title: "HEXWORLD.ToolBiome", icon: "fa-solid fa-palette" },
       undo: {
-        name: "undo", order: 7, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
+        name: "undo", order: 8, title: "HEXWORLD.Undo", icon: "fa-solid fa-rotate-left",
         button: true, onChange: () => canvas.hexworld?.undo()
       },
       reset: {
-        name: "reset", order: 8, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
+        name: "reset", order: 9, title: "HEXWORLD.ResetEdits", icon: "fa-solid fa-eraser",
         button: true, onChange: () => canvas.hexworld?.resetEdits()
       }
     }
