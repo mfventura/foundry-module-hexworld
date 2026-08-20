@@ -118,8 +118,10 @@ export function glyphChar(name) {
     const content = getComputedStyle(el, "::before").content;
     el.remove();
     if (content && content !== "none" && content !== "normal") {
-      const stripped = content.replace(/^["']|["']$/g, "");
-      if (stripped) ch = stripped;
+      // Modern FA uses the alt-text syntax (`content: "\f015" / ""`): the
+      // computed value is a list — take only the FIRST quoted string.
+      const m = content.match(/["']([^"']+)["']/);
+      if (m) ch = m[1];
     }
   } catch (_err) { /* headless */ }
   glyphCache.set(name, ch);
@@ -132,7 +134,11 @@ export function siteRenderContext() {
   const { family, weight } = faFontSpec();
   const glyphs = {};
   for (const [type, name] of Object.entries(icons)) glyphs[type] = glyphChar(name);
+  let markerStyle = "badge";
+  try {
+    markerStyle = game.settings.get("hexworld", "markerStyle") || "badge";
+  } catch (_err) { /* setting not registered yet */ }
   // Nudge the face into the font cache so 2D canvas can rasterize it.
   try { document.fonts?.load(`${weight} 24px ${family.split(",")[0]}`, Object.values(glyphs).join("")); } catch (_err) { /* ok */ }
-  return { glyphs, fontFamily: family, fontWeight: weight };
+  return { glyphs, fontFamily: family, fontWeight: weight, markerStyle };
 }

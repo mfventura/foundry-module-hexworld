@@ -36,6 +36,16 @@ Hooks.once("init", () => {
       }
     });
   }
+  game.settings.register("hexworld", "markerStyle", {
+    scope: "world",
+    config: false,
+    type: String,
+    default: "badge",
+    onChange: () => {
+      canvas.hexworld?.repaint();
+      HexWorldGeneratorApp.repaintPreview();
+    }
+  });
   game.settings.registerMenu("hexworld", "iconMenu", {
     name: "HEXWORLD.IconMenuName",
     label: "HEXWORLD.IconMenuLabel",

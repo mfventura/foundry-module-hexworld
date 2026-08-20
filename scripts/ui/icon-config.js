@@ -32,9 +32,11 @@ export class HexWorldIconConfig extends HandlebarsApplicationMixin(ApplicationV2
 
   /** Working copy of the selection: site type -> icon name. */
   #selection = null;
+  #style = null;
 
   async _prepareContext(_options) {
     this.#selection ??= configuredSiteIcons();
+    this.#style ??= game.settings.get("hexworld", "markerStyle") || "badge";
     const rows = SITE_TYPES.filter(t => t.id in SITE_ICON_SETTINGS).map(t => ({
       type: t.id,
       typeLabel: game.i18n.localize(`HEXWORLD.${t.key}`),
@@ -44,10 +46,19 @@ export class HexWorldIconConfig extends HandlebarsApplicationMixin(ApplicationV2
         active: this.#selection[t.id] === name
       }))
     }));
-    return { rows };
+    return { rows, badgeActive: this.#style === "badge", plainActive: this.#style === "plain" };
   }
 
   _onRender(_context, _options) {
+    for (const btn of this.element.querySelectorAll(".hw-style-btn")) {
+      btn.addEventListener("click", () => {
+        this.#style = btn.dataset.style;
+        for (const b of this.element.querySelectorAll(".hw-style-btn")) {
+          b.classList.toggle("active", b === btn);
+        }
+      });
+    }
+
     for (const btn of this.element.querySelectorAll(".hw-swatch[data-icon]")) {
       btn.addEventListener("click", () => {
         const row = btn.closest("[data-type]");
@@ -70,6 +81,9 @@ export class HexWorldIconConfig extends HandlebarsApplicationMixin(ApplicationV2
           await game.settings.set("hexworld", key, chosen);
         }
       }
+      if (this.#style && this.#style !== game.settings.get("hexworld", "markerStyle")) {
+        await game.settings.set("hexworld", "markerStyle", this.#style);
+      }
       this.close();
     } finally {
       target.disabled = false;
@@ -79,5 +93,6 @@ export class HexWorldIconConfig extends HandlebarsApplicationMixin(ApplicationV2
   _onClose(options) {
     super._onClose(options);
     this.#selection = null; // re-read settings next time
+    this.#style = null;
   }
 }

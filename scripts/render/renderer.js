@@ -206,6 +206,7 @@ function drawSites(ctx, world) {
   const weight = rc?.fontWeight ?? "900";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const plain = rc?.markerStyle === "plain";
   for (let c = 0; c < grid.n; c++) {
     const t = sites[c];
     if (!t) continue;
@@ -213,6 +214,18 @@ function drawSites(ctx, world) {
     const glyph = rc?.glyphs?.[t] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]]?.glyph;
     if (!style || !glyph) continue;
     const x = grid.cx[c], y = grid.cy[c];
+    if (plain) {
+      // Bare glyph with a light halo: readable on any terrain, no badge.
+      const px = Math.round(s * 0.52 * style.scale);
+      ctx.font = `${weight} ${px}px ${family}`;
+      ctx.lineWidth = Math.max(2, s * 0.09);
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(245, 240, 225, 0.92)";
+      ctx.strokeText(glyph, x, y);
+      ctx.fillStyle = "#2b2118";
+      ctx.fillText(glyph, x, y);
+      continue;
+    }
     const r = s * 0.32 * style.scale;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);

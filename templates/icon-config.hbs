@@ -1,5 +1,16 @@
 <div class="hw-icon-config">
   <p class="hint">{{localize "HEXWORLD.IconMenuHint"}}</p>
+  <fieldset>
+    <legend>{{localize "HEXWORLD.MarkerStyle"}}</legend>
+    <div class="hw-style-row">
+      <button type="button" class="hw-style-btn{{#if badgeActive}} active{{/if}}" data-style="badge">
+        <i class="fa-solid fa-circle-dot"></i> {{localize "HEXWORLD.MarkerBadge"}}
+      </button>
+      <button type="button" class="hw-style-btn{{#if plainActive}} active{{/if}}" data-style="plain">
+        <i class="fa-solid fa-font"></i> {{localize "HEXWORLD.MarkerPlain"}}
+      </button>
+    </div>
+  </fieldset>
   {{#each rows}}
   <fieldset data-type="{{type}}">
     <legend>{{typeLabel}}</legend>
