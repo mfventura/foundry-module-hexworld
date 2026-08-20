@@ -16,6 +16,24 @@ Módulo de generación procedural de mundos de fantasía totalmente integrado en
 - **Render cartográfico**: sombreado de relieve (hillshade), gradiente de profundidad oceánica, línea de costa y ríos con grosor según caudal.
 - **Creación de escena en un clic**: sube la imagen (webp) a `worlds/<mundo>/hexworld/` y crea la escena con rejilla, distancia y unidades configuradas.
 
+## Instalación
+
+En Foundry: **Add-on Modules → Install Module** y pega esta URL de manifiesto:
+
+```
+https://github.com/mfventura/hexworld/releases/latest/download/module.json
+```
+
+Apunta siempre a la última release publicada, así que las actualizaciones llegan por el botón *Update* de Foundry.
+
+### Publicar una nueva versión
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+El workflow de GitHub Actions inyecta la versión del tag en `module.json`, empaqueta `module.zip` y publica la release con ambos ficheros adjuntos.
+
 ## Instalación (desarrollo)
 
 1. Enlaza o copia esta carpeta en el directorio de módulos de Foundry con el nombre `hexworld`:

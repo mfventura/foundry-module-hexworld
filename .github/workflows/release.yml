@@ -1,0 +1,47 @@
+# Publishes a Foundry-installable release whenever a version tag is pushed.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# The workflow injects the tag version and the release URLs into module.json,
+# zips the module with files at the archive root (as Foundry expects), and
+# attaches module.json + module.zip to the GitHub release. The stable install
+# manifest is always:
+#   https://github.com/mfventura/hexworld/releases/latest/download/module.json
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inject version and URLs into module.json
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          jq --arg version "$VERSION" \
+             --arg manifest "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/module.json" \
+             --arg download "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/module.zip" \
+             '.version = $version | .manifest = $manifest | .download = $download' \
+             module.json > module.json.tmp
+          mv module.json.tmp module.json
+          jq -r '"version=\(.version)\ndownload=\(.download)"' module.json
+
+      - name: Build module archive
+        run: zip -r module.zip module.json scripts styles templates lang README.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            module.json
+            module.zip
+          generate_release_notes: true
