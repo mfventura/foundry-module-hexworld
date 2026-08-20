@@ -4,6 +4,8 @@
  * (the grid's own coordinate space).
  */
 
+import { RIVER_FORCE, RIVER_SUPPRESS } from "./hydrology.js";
+
 /**
  * Semantic paint tools push elevation toward a target relative to the frozen
  * sea level; the derived pipeline (flood-fill, rivers, biomes) then makes the
@@ -92,6 +94,73 @@ export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x,
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, overrides[c]);
     overrides[c] = biome;
     touched++;
+  }
+  return touched;
+}
+
+function nearestCell(grid, x, y) {
+  let best = -1, bestD = Infinity;
+  for (let c = 0; c < grid.n; c++) {
+    const dx = grid.cx[c] - x;
+    const dy = grid.cy[c] - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+/**
+ * River editing: path-based, one application per click (no radius/strength).
+ * - "riverAdd": from the clicked land cell, follow the real drainage (flowTo
+ *   over the filled surface) forcing river cells until reaching water, the
+ *   map border, or an existing river — the new river always flows downhill
+ *   and ends somewhere sensible.
+ * - "riverRemove": from the clicked river cell, suppress downstream until the
+ *   mouth, but stop at a confluence still fed by another river branch, so
+ *   shared trunks survive. Click a source to delete a whole river.
+ * @param {object} world  result of deriveWorld() — current isRiver/flowTo
+ * @param {Uint8Array} riverEdits  per-cell river state (mutated)
+ * @param {Map<number, number>|null} strokeUndo  pre-stroke state per touched cell
+ * @param {object} opts {tool: "riverAdd"|"riverRemove", x, y} world pixels
+ * @returns {number} cells touched
+ */
+export function applyRiverTool(world, riverEdits, strokeUndo, { tool, x, y }) {
+  const { grid, isWater, isRiver, flowTo } = world;
+  const start = nearestCell(grid, x, y);
+  if (start < 0) return 0;
+  let touched = 0;
+  const set = (c, v) => {
+    if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, riverEdits[c]);
+    riverEdits[c] = v;
+    touched++;
+  };
+
+  if (tool === "riverAdd") {
+    if (isWater[start]) return 0;
+    let cur = start, steps = 0;
+    while (cur >= 0 && !isWater[cur] && steps++ < grid.n) {
+      const joinsExisting = (cur !== start) && isRiver[cur] && riverEdits[cur] !== RIVER_SUPPRESS;
+      set(cur, RIVER_FORCE);
+      if (joinsExisting) break; // the existing network already reaches water
+      cur = flowTo[cur];
+    }
+  } else if (tool === "riverRemove") {
+    if (isWater[start] || !isRiver[start]) return 0;
+    let cur = start, steps = 0;
+    while (cur >= 0 && !isWater[cur] && isRiver[cur] && steps++ < grid.n) {
+      set(cur, RIVER_SUPPRESS);
+      const next = flowTo[cur];
+      if (next < 0 || isWater[next] || !isRiver[next]) break;
+      let fedByOther = false;
+      for (const nb of grid.neighbors[next]) {
+        if (nb !== cur && isRiver[nb] && riverEdits[nb] !== RIVER_SUPPRESS && flowTo[nb] === next) {
+          fedByOther = true;
+          break;
+        }
+      }
+      if (fedByOther) break;
+      cur = next;
+    }
   }
   return touched;
 }

@@ -8,7 +8,7 @@
 
 import { buildBase, deriveWorld, MAX_CELLS } from "../generator/worldgen.js";
 import { TEMPLATES } from "../generator/heightmap.js";
-import { applyBrush, applyBiomeBrush } from "../generator/brush.js";
+import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.js";
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
@@ -34,6 +34,7 @@ const DEFAULT_PARAMS = {
 };
 
 const UNDO_LIMIT = 20;
+const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
 
 export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static #instance = null;
@@ -50,6 +51,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #edits = null;
   /** @type {Uint8Array|null} painted biome overrides (NO_OVERRIDE = derived) */
   #overrides = null;
+  /** @type {Uint8Array|null} manual river edits (0 = derived) */
+  #riverEdits = null;
   /** @type {object|null} derived world currently shown in the preview */
   #world = null;
   #lastScale = 1;
@@ -259,7 +262,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   #derive() {
     if (!this.#base) return;
-    this.#world = deriveWorld(this.#base, this.#edits, this.#overrides);
+    this.#world = deriveWorld(this.#base, this.#edits, this.#overrides, this.#riverEdits);
     this.#drawPreview();
     this.#updateStats();
   }
@@ -292,7 +295,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     ev.currentTarget.setPointerCapture(ev.pointerId);
     this.#painting = true;
     this.#strokeUndo = {
-      channel: this.#tool === "biome" ? "biome" : "elev",
+      channel: this.#tool === "biome" ? "biome" : (RIVER_TOOLS.has(this.#tool) ? "river" : "elev"),
       cells: new Map()
     };
     this.#applyBrush(ev);
@@ -300,6 +303,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   #onPaintMove(ev) {
     if (!this.#painting) return;
+    if (RIVER_TOOLS.has(this.#tool)) return; // river tools are click-only
     ev.preventDefault();
     this.#applyBrush(ev);
   }
@@ -322,7 +326,13 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!point) return;
     const { grid } = this.#base;
     const { radius, strength } = this.#brushSettings();
-    if (this.#tool === "biome") {
+    if (RIVER_TOOLS.has(this.#tool)) {
+      if (!this.#world) return;
+      this.#riverEdits ??= new Uint8Array(grid.n);
+      applyRiverTool(this.#world, this.#riverEdits, this.#strokeUndo?.cells, {
+        tool: this.#tool, x: point.x, y: point.y
+      });
+    } else if (this.#tool === "biome") {
       this.#overrides ??= new Uint8Array(grid.n).fill(NO_OVERRIDE);
       applyBiomeBrush(this.#base, this.#overrides, this.#strokeUndo?.cells, {
         biome: this.#brushBiome, radius, x: point.x, y: point.y
@@ -374,6 +384,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       this.#base = buildBase(params);
       this.#edits = null;
       this.#overrides = null;
+      this.#riverEdits = null;
       this.#undoStack = [];
       this.#derive();
       const createBtn = this.element.querySelector("button[data-action=createScene]");
@@ -390,13 +401,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   static #onUndoEdit(_event, _target) {
     const stroke = this.#undoStack.pop();
     if (!stroke) return;
-    if (stroke.channel === "biome") {
-      if (!this.#overrides) return;
-      for (const [c, prev] of stroke.cells) this.#overrides[c] = prev;
-    } else {
-      if (!this.#edits) return;
-      for (const [c, prev] of stroke.cells) this.#edits[c] = prev;
-    }
+    const target = { biome: this.#overrides, river: this.#riverEdits, elev: this.#edits }[stroke.channel];
+    if (!target) return;
+    for (const [c, prev] of stroke.cells) target[c] = prev;
     this.#derive();
     this.#refreshEditbar();
   }
@@ -405,6 +412,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!this.#base) return;
     this.#edits = null;
     this.#overrides = null;
+    this.#riverEdits = null;
     this.#undoStack = [];
     this.#derive();
     this.#refreshEditbar();

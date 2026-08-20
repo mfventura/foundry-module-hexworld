@@ -46,23 +46,37 @@ export function decodeEdits(encoded, length) {
   return edits;
 }
 
-/** @returns {string|null} null when no cell has an override */
-export function encodeOverrides(overrides) {
-  if (!overrides) return null;
+/**
+ * Generic per-cell byte channel. Returns null when every cell holds `empty`,
+ * so untouched channels never pollute the scene flags.
+ * @returns {string|null}
+ */
+export function encodeBytes(bytes, empty = 0) {
+  if (!bytes) return null;
   let any = false;
-  for (let i = 0; i < overrides.length; i++) {
-    if (overrides[i] !== NO_OVERRIDE) { any = true; break; }
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] !== empty) { any = true; break; }
   }
   if (!any) return null;
-  return bytesToBase64(overrides);
+  return bytesToBase64(bytes);
+}
+
+/** @returns {Uint8Array|null} inverse of encodeBytes */
+export function decodeBytes(encoded, length) {
+  if (!encoded) return null;
+  const binary = atob(encoded);
+  if (binary.length !== length) return null;
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** @returns {string|null} null when no cell has an override */
+export function encodeOverrides(overrides) {
+  return encodeBytes(overrides, NO_OVERRIDE);
 }
 
 /** @returns {Uint8Array|null} inverse of encodeOverrides */
 export function decodeOverrides(encoded, length) {
-  if (!encoded) return null;
-  const binary = atob(encoded);
-  if (binary.length !== length) return null;
-  const overrides = new Uint8Array(length);
-  for (let i = 0; i < length; i++) overrides[i] = binary.charCodeAt(i);
-  return overrides;
+  return decodeBytes(encoded, length);
 }

@@ -40,6 +40,8 @@
   "HEXWORLD.ToolLand": "Paint lowland",
   "HEXWORLD.ToolMountain": "Paint mountain",
   "HEXWORLD.ToolBiome": "Paint biome",
+  "HEXWORLD.ToolRiverAdd": "Add river (springs where you click, flows to the sea)",
+  "HEXWORLD.ToolRiverRemove": "Remove river (downstream from where you click)",
   "HEXWORLD.BiomeErase": "Erase painted biome (back to derived)",
   "HEXWORLD.BiomeGrassland": "Grassland",
   "HEXWORLD.BiomeDeciduous": "Deciduous forest",

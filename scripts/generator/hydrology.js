@@ -11,6 +11,10 @@
 
 const EPS = 1e-5;
 
+/** Per-cell manual river edit states (0 = derived). */
+export const RIVER_FORCE = 1;
+export const RIVER_SUPPRESS = 2;
+
 class MinHeap {
   constructor(keys) { this.keys = keys; this.heap = []; }
   get size() { return this.heap.length; }
@@ -144,11 +148,13 @@ export function computeFlux(grid, filled, isOcean, isLake, moist) {
 }
 
 /**
- * Mark river cells: land cells whose flux exceeds a quantile-based threshold.
+ * Mark river cells: land cells whose flux exceeds a quantile-based threshold,
+ * then apply manual edits (RIVER_FORCE / RIVER_SUPPRESS) on land cells.
  * @param {number} density 0..1 slider — fraction of land that carries a river
+ * @param {Uint8Array|null} riverEdits per-cell manual state, 0 = derived
  * @returns {{isRiver: Uint8Array, threshold: number}}
  */
-export function markRivers(grid, flux, isWater, density) {
+export function markRivers(grid, flux, isWater, density, riverEdits = null) {
   const landFlux = [];
   for (let c = 0; c < grid.n; c++) if (!isWater[c]) landFlux.push(flux[c]);
   if (!landFlux.length) return { isRiver: new Uint8Array(grid.n), threshold: Infinity };
@@ -159,7 +165,12 @@ export function markRivers(grid, flux, isWater, density) {
 
   const isRiver = new Uint8Array(grid.n);
   for (let c = 0; c < grid.n; c++) {
-    if (!isWater[c] && flux[c] >= threshold) isRiver[c] = 1;
+    if (isWater[c]) continue;
+    let river = flux[c] >= threshold;
+    const e = riverEdits ? riverEdits[c] : 0;
+    if (e === RIVER_FORCE) river = true;
+    else if (e === RIVER_SUPPRESS) river = false;
+    if (river) isRiver[c] = 1;
   }
   return { isRiver, threshold };
 }

@@ -28,7 +28,7 @@ export const MAX_CELLS = 25000;
  * @param {number} params.riverDensity 0..1
  */
 export function generateWorld(params) {
-  return deriveWorld(buildBase(params), null, null);
+  return deriveWorld(buildBase(params), null, null, null);
 }
 
 /**
@@ -63,11 +63,15 @@ export function buildBase(params) {
  * a biome override layer. Overrides are a final layer over assignBiomes —
  * water is always elevation-driven, so an override on a submerged cell stays
  * latent until the cell is dry land again.
+ * Manual rivers are a third channel (RIVER_FORCE/RIVER_SUPPRESS per cell)
+ * applied inside markRivers, land only — like biome overrides they stay
+ * latent while a cell is submerged.
  * @param {object} base result of buildBase()
  * @param {Float32Array|null} edits elevation deltas, same length as cells
  * @param {Uint8Array|null} overrides biome id per cell, NO_OVERRIDE = none
+ * @param {Uint8Array|null} riverEdits per-cell river state, 0 = derived
  */
-export function deriveWorld(base, edits, overrides = null) {
+export function deriveWorld(base, edits, overrides = null, riverEdits = null) {
   const { params, grid, elevBase, sea } = base;
 
   let elev = elevBase;
@@ -82,14 +86,14 @@ export function deriveWorld(base, edits, overrides = null) {
   const temp = computeTemperature(grid, elev, sea, params.climate);
   const moist = computeMoisture(grid, makeRng(params.seed + ":moist"), isWater, params.moisture);
   const { flowTo, flux } = computeFlux(grid, filled, isOcean, isLake, moist);
-  const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity);
+  const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity, riverEdits);
 
   const world = {
     params, grid, elev, sea, filled,
     isOcean, isLake, isWater,
     temp, moist, flowTo, flux, isRiver,
     riverThreshold: threshold,
-    base, edits, overrides
+    base, edits, overrides, riverEdits
   };
   world.biome = assignBiomes(world);
   if (overrides) {

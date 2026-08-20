@@ -9,14 +9,18 @@
  */
 
 import { buildBase, deriveWorld } from "../generator/worldgen.js";
-import { applyBrush, applyBiomeBrush } from "../generator/brush.js";
+import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.js";
 import { B } from "../generator/biomes.js";
-import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides, NO_OVERRIDE } from "../lib/codec.js";
+import {
+  encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
+  encodeBytes, decodeBytes, NO_OVERRIDE
+} from "../lib/codec.js";
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 
 const UNDO_LIMIT = 20;
-const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain", "biome"]);
+const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
+const PAINT_TOOLS = new Set(["raise", "lower", "smooth", "water", "land", "mountain", "biome", ...RIVER_TOOLS]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   static get layerOptions() {
@@ -27,6 +31,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   edits = null;
   /** @type {Uint8Array|null} painted biome overrides (NO_OVERRIDE = derived) */
   overrides = null;
+  /** @type {Uint8Array|null} manual river edits (0 = derived) */
+  riverEdits = null;
   world = null;
   brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND };
 
@@ -78,7 +84,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#undoStack = [];
     this.#strokeUndo = null;
     this.#painting = false;
-    this.base = this.edits = this.overrides = this.world = null;
+    this.base = this.edits = this.overrides = this.riverEdits = this.world = null;
   }
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
@@ -90,7 +96,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.base = buildBase(f.params);
       this.edits = decodeEdits(f.edits ?? null, this.base.grid.n);
       this.overrides = decodeOverrides(f.biomes ?? null, this.base.grid.n);
-      this.world = deriveWorld(this.base, this.edits, this.overrides);
+      this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
+      this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.#mesh = new TerrainMesh();
       this.#mesh.draw(this.world);
     } catch (err) {
@@ -113,8 +120,9 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   }
 
   #beginStroke() {
+    const tool = this.activeTool;
     this.#strokeUndo = {
-      channel: this.activeTool === "biome" ? "biome" : "elev",
+      channel: tool === "biome" ? "biome" : (RIVER_TOOLS.has(tool) ? "river" : "elev"),
       cells: new Map()
     };
   }
@@ -138,6 +146,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   _onDragLeftMove(event) {
     if (!this.#painting) return;
+    if (RIVER_TOOLS.has(this.activeTool)) return; // river tools are click-only
     const p = event.interactionData?.destination;
     if (p) this.#paintAt(p);
   }
@@ -159,7 +168,13 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const d = canvas.dimensions;
     const x = point.x - d.sceneX;
     const y = point.y - d.sceneY;
-    if (this.activeTool === "biome") {
+    if (RIVER_TOOLS.has(this.activeTool)) {
+      if (!this.world) return;
+      this.riverEdits ??= new Uint8Array(this.base.grid.n);
+      applyRiverTool(this.world, this.riverEdits, this.#strokeUndo?.cells, {
+        tool: this.activeTool, x, y
+      });
+    } else if (this.activeTool === "biome") {
       this.overrides ??= new Uint8Array(this.base.grid.n).fill(NO_OVERRIDE);
       applyBiomeBrush(this.base, this.overrides, this.#strokeUndo?.cells, {
         biome: this.brush.biome, radius: this.brush.radius, x, y
@@ -183,7 +198,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
 
   #refresh() {
     if (!this.base) return;
-    this.world = deriveWorld(this.base, this.edits, this.overrides);
+    this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
     this.#mesh?.draw(this.world);
   }
 
@@ -207,6 +222,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     await scene.update({
       "flags.hexworld.edits": encodeEdits(this.edits),
       "flags.hexworld.biomes": encodeOverrides(this.overrides),
+      "flags.hexworld.rivers": encodeBytes(this.riverEdits),
       "flags.hexworld.stats": this.world.stats
     }, { hexworldLocal: true });
   }
@@ -214,13 +230,9 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   undo() {
     const stroke = this.#undoStack.pop();
     if (!stroke) return;
-    if (stroke.channel === "biome") {
-      if (!this.overrides) return;
-      for (const [c, prev] of stroke.cells) this.overrides[c] = prev;
-    } else {
-      if (!this.edits) return;
-      for (const [c, prev] of stroke.cells) this.edits[c] = prev;
-    }
+    const target = { biome: this.overrides, river: this.riverEdits, elev: this.edits }[stroke.channel];
+    if (!target) return;
+    for (const [c, prev] of stroke.cells) target[c] = prev;
     this.#refresh();
     this.#persist();
   }
@@ -229,6 +241,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (!this.base) return;
     this.edits = null;
     this.overrides = null;
+    this.riverEdits = null;
     this.#undoStack = [];
     this.#refresh();
     this.#persist();

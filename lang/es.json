@@ -40,6 +40,8 @@
   "HEXWORLD.ToolLand": "Pintar llanura",
   "HEXWORLD.ToolMountain": "Pintar montaña",
   "HEXWORLD.ToolBiome": "Pintar bioma",
+  "HEXWORLD.ToolRiverAdd": "Añadir río (nace donde pinchas y fluye hasta el mar)",
+  "HEXWORLD.ToolRiverRemove": "Eliminar río (aguas abajo desde donde pinchas)",
   "HEXWORLD.BiomeErase": "Borrar bioma pintado (volver al derivado)",
   "HEXWORLD.BiomeGrassland": "Pradera",
   "HEXWORLD.BiomeDeciduous": "Bosque caducifolio",
