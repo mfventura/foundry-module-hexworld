@@ -50,6 +50,7 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
         realms: encodeBytes(world.realms ?? null),
         sitesFormat: "u8",
         names: world.names && Object.keys(world.names).length ? world.names : null,
+        labels: world.labelOffsets && Object.keys(world.labelOffsets).length ? world.labelOffsets : null,
         stats: world.stats
       }
     }

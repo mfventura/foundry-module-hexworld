@@ -18,6 +18,7 @@ import { generateRealms } from "../generator/realms.js";
 import { generateNames, i18nNamePatterns, nameKeyAt } from "../generator/names.js";
 import { siteTypeContext } from "../canvas/brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
+import { labelAt } from "../render/labels.js";
 import {
   NO_OVERRIDE, encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes
@@ -93,6 +94,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #realms = null;
   /** @type {Record<string, string>|null} feature names */
   #names = null;
+  /** @type {Record<string, [number, number]>|null} manual label offsets */
+  #labelOffsets = null;
+  /** @type {{key: string, bx: number, by: number}|null} */
+  #dragLabel = null;
   #routeAnchor = -1;
   #brushSite = SITE.VILLAGE;
   /** @type {object|null} derived world currently shown in the preview */
@@ -249,6 +254,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       canvas.addEventListener("pointercancel", ev => this.#onPaintEnd(ev));
       canvas.addEventListener("pointermove", ev => this.#onHover(ev));
       canvas.addEventListener("pointerleave", () => this.#onHoverEnd());
+      canvas.addEventListener("contextmenu", ev => this.#onCanvasContext(ev));
     }
 
     // False-color view selector.
@@ -306,6 +312,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       this.#roads = decodeBytes(flags.roads ?? null, n);
       this.#realms = decodeBytes(flags.realms ?? null, n);
       this.#names = { ...(flags.names ?? {}) };
+      this.#labelOffsets = { ...(flags.labels ?? {}) };
       this.#undoStack = [];
       this.#redoStack = [];
       this.#derive();
@@ -399,6 +406,20 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     }
   }
 
+  /** Right-click with the label tool returns a label to its automatic spot. */
+  #onCanvasContext(ev) {
+    if (this.#tool !== "labelMove" || !this.#world || !this.#labelOffsets) return;
+    ev.preventDefault();
+    const point = this.#canvasPoint(ev);
+    if (!point) return;
+    const e = labelAt(this.#world, point.x, point.y, this.#base.grid.size * 1.2);
+    if (!e || !this.#labelOffsets[e.key]) return;
+    this.#labelOffsets = { ...this.#labelOffsets };
+    delete this.#labelOffsets[e.key];
+    this.#world.labelOffsets = this.#labelOffsets;
+    this.#drawPreview();
+  }
+
   #onHoverEnd() {
     const cursor = this.element.querySelector(".hw-brush-cursor");
     if (cursor) cursor.style.display = "none";
@@ -468,6 +489,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#world.roads = this.#roads;
     this.#world.realms = this.#realms;
     this.#world.names = this.#names ?? {};
+    this.#world.labelOffsets = this.#labelOffsets ?? {};
     this.#drawPreview();
     this.#updateStats();
   }
@@ -522,6 +544,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   #onPaintEnd(ev) {
     if (!this.#painting) return;
     this.#painting = false;
+    this.#dragLabel = null;
     try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_err) { /* already released */ }
     if (this.#strokeUndo?.cells.size) {
       this.#undoStack.push(this.#strokeUndo);
@@ -540,6 +563,25 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const { radius, strength } = this.#brushSettings();
     if (this.#tool === "rename") {
       this.#renameAt(point); // async dialog; fire and forget
+      return;
+    }
+    if (this.#tool === "labelMove") {
+      if (!this.#world) return;
+      if (!this.#dragLabel) {
+        const e = labelAt(this.#world, point.x, point.y, this.#base.grid.size * 1.2);
+        if (e) this.#dragLabel = { key: e.key, bx: e.bx, by: e.by };
+        return;
+      }
+      this.#labelOffsets = {
+        ...(this.#labelOffsets ?? {}),
+        [this.#dragLabel.key]: [Math.round(point.x - this.#dragLabel.bx), Math.round(point.y - this.#dragLabel.by)]
+      };
+      this.#world.labelOffsets = this.#labelOffsets;
+      const now = performance.now();
+      if (now - this.#lastDerive >= 60) {
+        this.#lastDerive = now;
+        this.#drawPreview();
+      }
       return;
     }
     if (this.#tool === "site") {
@@ -673,6 +715,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         this.#sites = null;
         this.#roads = null;
         this.#realms = null;
+        this.#labelOffsets = null;
       }
       this.#undoStack = [];
       this.#redoStack = [];
@@ -706,6 +749,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#world.realms = this.#realms;
     this.#names = generateNames(this.#world, sites, null, makeRng(params.seed + ":names"), i18nNamePatterns());
     this.#world.names = this.#names;
+    this.#labelOffsets = null; // fresh names, fresh automatic layout
+    this.#world.labelOffsets = {};
     // Wholesale replacement is not stroke-undoable: drop stale history.
     this.#undoStack = [];
     this.#redoStack = [];
@@ -755,6 +800,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#roads = null;
     this.#realms = null;
     this.#names = null;
+    this.#labelOffsets = null;
     this.#undoStack = [];
     this.#redoStack = [];
     this.#derive();
@@ -766,9 +812,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!this.#editScene || !this.#world) return;
     target.disabled = true;
     try {
-      // Object flags merge on update, so replace the names map wholesale:
-      // clear it first, then write the current one (if any).
-      await this.#editScene.update({ "flags.hexworld.-=names": null });
+      // Object flags merge on update, so replace the sparse maps wholesale:
+      // clear them first, then write the current ones (if any).
+      await this.#editScene.update({ "flags.hexworld.-=names": null, "flags.hexworld.-=labels": null });
       const update = {
         "flags.hexworld.seed": this.#world.params.seed,
         "flags.hexworld.params": this.#world.params,
@@ -782,6 +828,9 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       };
       if (this.#names && Object.keys(this.#names).length) {
         update["flags.hexworld.names"] = this.#names;
+      }
+      if (this.#labelOffsets && Object.keys(this.#labelOffsets).length) {
+        update["flags.hexworld.labels"] = this.#labelOffsets;
       }
       await this.#editScene.update(update);
       ui.notifications.info(game.i18n.format("HEXWORLD.NotifySceneUpdated", { name: this.#editScene.name }));

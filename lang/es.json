@@ -77,6 +77,7 @@
   "HEXWORLD.IconStar": "Estrella",
   "HEXWORLD.IconLocationDot": "Marcador",
   "HEXWORLD.ToolRename": "Renombrar (click sobre un sitio, río, lago o mar)",
+  "HEXWORLD.ToolLabelMove": "Mover etiqueta (arrastra una etiqueta; click derecho = posición automática)",
   "HEXWORLD.RenameTitle": "Renombrar",
   "HEXWORLD.RenameNothing": "Ahí no hay nada que renombrar.",
   "HEXWORLD.NameLabel": "Nombre (vacío = quitar etiqueta)",

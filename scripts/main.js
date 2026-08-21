@@ -132,6 +132,7 @@ Hooks.on("getSceneControlButtons", controls => {
       roadMajor: { name: "roadMajor", order: 13, title: "HEXWORLD.ToolRoadMajor", icon: "fa-solid fa-road", visible: tab === "sites" },
       roadErase: { name: "roadErase", order: 14, title: "HEXWORLD.ToolRoadErase", icon: "fa-solid fa-road-circle-xmark", visible: tab === "sites" },
       realm: { name: "realm", order: 15, title: "HEXWORLD.ToolRealm", icon: "fa-solid fa-flag", visible: tab === "sites" },
+      labelMove: { name: "labelMove", order: 16, title: "HEXWORLD.ToolLabelMove", icon: "fa-solid fa-arrows-up-down-left-right", visible: tab === "sites" },
       // --- Always available ---
       hud: {
         name: "hud", order: 90, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",

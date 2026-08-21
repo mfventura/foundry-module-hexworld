@@ -22,6 +22,7 @@ import { BrushHud } from "./brush-hud.js";
 import { cellIndexAt } from "../ui/cell-info.js";
 import { siteRenderContext } from "../render/site-icons.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
+import { labelAt } from "../render/labels.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
@@ -30,7 +31,7 @@ const ROUTE_TOOLS = new Set(["roadMinor", "roadMajor"]);
 const CLICK_TOOLS = new Set([...RIVER_TOOLS, ...ROUTE_TOOLS, "site", "rename"]);
 const PAINT_TOOLS = new Set([
   "raise", "lower", "smooth", "water", "land", "mountain", "biome",
-  "site", "roadErase", "rename", "realm", ...RIVER_TOOLS, ...ROUTE_TOOLS
+  "site", "roadErase", "rename", "realm", "labelMove", ...RIVER_TOOLS, ...ROUTE_TOOLS
 ]);
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
@@ -52,6 +53,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   realms = null;
   /** @type {Record<string, string>} feature names (sparse, from flags) */
   names = {};
+  /** @type {Record<string, [number, number]>} manual label offsets (grid px) */
+  labelOffsets = {};
+  /** @type {{key: string, bx: number, by: number}|null} label being dragged */
+  #dragLabel = null;
   /** Client-local label visibility (HUD toggle). */
   showLabels = true;
   world = null;
@@ -132,7 +137,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const tool = this.activeTool;
     if (!this.world || !PAINT_TOOLS.has(tool)) { cur.visible = false; return; }
     const p = ev.getLocalPosition(canvas.stage);
-    const areaTool = !CLICK_TOOLS.has(tool);
+    const areaTool = !CLICK_TOOLS.has(tool) && tool !== "labelMove";
     const r = areaTool ? this.brush.radius * this.world.grid.size : this.world.grid.size * 0.3;
     cur.clear();
     cur.lineStyle(2, 0xffffff, 0.85);
@@ -161,6 +166,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.base = this.edits = this.overrides = this.riverEdits = null;
     this.sites = this.roads = this.realms = this.world = null;
     this.names = {};
+    this.labelOffsets = {};
+    this.#dragLabel = null;
   }
 
   /** Attach the render-only extras (channels are attached by the callers). */
@@ -168,6 +175,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (!this.world) return;
     this.world.siteRender = siteRenderContext();
     this.world.names = this.names;
+    this.world.labelOffsets = this.labelOffsets;
     this.world.showLabels = this.showLabels;
   }
 
@@ -188,6 +196,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.roads = decodeBytes(f.roads ?? null, this.base.grid.n);
       this.realms = decodeBytes(f.realms ?? null, this.base.grid.n);
       this.names = { ...(f.names ?? {}) };
+      this.labelOffsets = { ...(f.labels ?? {}) };
       this.world = deriveWorld(this.base, this.edits, this.overrides, this.riverEdits);
       this.world.sites = this.sites;
       this.world.roads = this.roads;
@@ -301,6 +310,24 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.#renameAt(x, y); // async dialog; fire and forget
       return;
     }
+    if (tool === "labelMove") {
+      if (!this.world) return;
+      if (!this.#dragLabel) {
+        const e = labelAt(this.world, x, y, this.world.grid.size * 1.2);
+        if (e) this.#dragLabel = { key: e.key, bx: e.bx, by: e.by };
+        return;
+      }
+      this.labelOffsets = {
+        ...this.labelOffsets,
+        [this.#dragLabel.key]: [Math.round(x - this.#dragLabel.bx), Math.round(y - this.#dragLabel.by)]
+      };
+      const now = performance.now();
+      if (now - this.#lastDerive >= 80) {
+        this.#lastDerive = now;
+        this.repaint();
+      }
+      return;
+    }
     if (tool === "site") {
       const c = cellIndexAt(this.world, x, y);
       if (c < 0) return;
@@ -395,8 +422,31 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       this.#redoStack = []; // a new stroke invalidates the redo history
     }
     this.#strokeUndo = null;
+    this.#dragLabel = null;
     this.#refresh();
     this.#persist();
+  }
+
+  /** Right-click with the label tool returns a label to its automatic spot. */
+  _onClickRight(event) {
+    if (this.activeTool === "labelMove" && game.user.isGM && this.world) {
+      const p = event.interactionData?.origin;
+      if (p) {
+        const d = canvas.dimensions;
+        this.#resetLabelAt(p.x - d.sceneX, p.y - d.sceneY);
+      }
+      return;
+    }
+    super._onClickRight?.(event);
+  }
+
+  async #resetLabelAt(x, y) {
+    const e = labelAt(this.world, x, y, this.world.grid.size * 1.2);
+    if (!e || !this.labelOffsets[e.key]) return;
+    this.labelOffsets = { ...this.labelOffsets };
+    delete this.labelOffsets[e.key];
+    this.repaint();
+    await canvas.scene?.update({ [`flags.hexworld.labels.-=${e.key}`]: null }, { hexworldLocal: true });
   }
 
   /** Name-edit dialog for a key; persists and repaints. @returns {Promise<boolean>} changed */
@@ -542,6 +592,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     // whole map (reset) needs the explicit deletion syntax.
     if (this.names && Object.keys(this.names).length) update["flags.hexworld.names"] = this.names;
     else update["flags.hexworld.-=names"] = null;
+    if (this.labelOffsets && Object.keys(this.labelOffsets).length) update["flags.hexworld.labels"] = this.labelOffsets;
+    else update["flags.hexworld.-=labels"] = null;
     await scene.update(update, { hexworldLocal: true });
   }
 
@@ -587,6 +639,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.roads = null;
     this.realms = null;
     this.names = {};
+    this.labelOffsets = {};
     this.#undoStack = [];
     this.#redoStack = [];
     this.#refresh();

@@ -6,7 +6,7 @@
 
 import { B, BIOME_COLORS } from "../generator/biomes.js";
 import { SITE_GLYPHS, SITE_STYLE, DEFAULT_SITE_ICONS } from "./site-icons.js";
-import { computeLabelAnchors } from "../generator/names.js";
+import { layoutLabels } from "./labels.js";
 
 const DEEP_OCEAN = [30, 61, 96];
 const SHALLOW_OCEAN = [77, 129, 174];
@@ -320,62 +320,36 @@ function drawSites(ctx, world) {
   }
 }
 
+const LABEL_COLORS = {
+  realm: { fill: "rgba(52, 38, 24, 0.65)", halo: "rgba(245, 240, 225, 0.55)", haloScale: 0.16 },
+  city: { fill: "#241c12", halo: "rgba(245, 240, 225, 0.85)", haloScale: 0.24 },
+  village: { fill: "#241c12", halo: "rgba(245, 240, 225, 0.85)", haloScale: 0.24 },
+  poi: { fill: "#241c12", halo: "rgba(245, 240, 225, 0.85)", haloScale: 0.24 },
+  sea: { fill: "#1d4e79", halo: "rgba(235, 242, 248, 0.8)", haloScale: 0.24 },
+  lake: { fill: "#1d4e79", halo: "rgba(235, 242, 248, 0.8)", haloScale: 0.24 },
+  river: { fill: "#1d4e79", halo: "rgba(235, 242, 248, 0.8)", haloScale: 0.24 }
+};
+
 /**
- * Feature labels: names from world.names drawn with a light halo. Settlement
- * labels sit under their marker; water names are italic steel blue at the
- * feature's anchor cell.
+ * Feature labels, positioned by layoutLabels (collision avoidance + manual
+ * offsets) and drawn with a light halo.
  */
 function drawLabels(ctx, world) {
-  const names = world.names;
-  if (!names || world.showLabels === false) return;
-  const { grid } = world;
-  const s = grid.size;
-  const anchors = computeLabelAnchors(world, world.sites ?? null);
+  if (!world.names || world.showLabels === false) return;
   ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
-
-  const halo = (text, x, y) => {
-    ctx.strokeText(text, x, y);
-    ctx.fillText(text, x, y);
-  };
-
-  // Realm names: large, translucent, under every other label.
-  ctx.textBaseline = "middle";
-  for (const a of anchors.realms) {
-    const name = names[a.key];
-    if (!name) continue;
-    const size = s * 0.8;
-    ctx.font = `bold ${Math.round(size)}px "Signika", serif`;
-    ctx.lineWidth = Math.max(2, size * 0.16);
-    ctx.strokeStyle = "rgba(245, 240, 225, 0.55)";
-    ctx.fillStyle = "rgba(52, 38, 24, 0.65)";
-    halo(name, grid.cx[a.cell], grid.cy[a.cell]);
-  }
-
-  ctx.textBaseline = "top";
-  for (const a of anchors.sites) {
-    const name = names[a.key];
-    if (!name) continue;
-    const size = a.type === 2 ? s * 0.4 : (a.type === 1 ? s * 0.32 : s * 0.28);
-    ctx.font = `${a.type === 2 ? "bold " : ""}${Math.round(size)}px "Signika", sans-serif`;
-    ctx.lineWidth = Math.max(2, size * 0.24);
-    ctx.strokeStyle = "rgba(245, 240, 225, 0.85)";
-    ctx.fillStyle = "#241c12";
-    halo(name, grid.cx[a.cell], grid.cy[a.cell] + s * 0.42);
-  }
-
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#1d4e79";
-  ctx.strokeStyle = "rgba(235, 242, 248, 0.8)";
-  for (const group of [anchors.rivers, anchors.waters]) {
-    for (const a of group) {
-      const name = names[a.key];
-      if (!name) continue;
-      const size = a.isSea ? s * 0.42 : s * 0.32;
-      ctx.font = `italic ${Math.round(size)}px "Signika", serif`;
-      ctx.lineWidth = Math.max(2, size * 0.24);
-      halo(name, grid.cx[a.cell], grid.cy[a.cell]);
-    }
+  const entries = layoutLabels(world);
+  // Realms first (background), then the rest in layout order.
+  entries.sort((a, b) => Number(b.kind === "realm") - Number(a.kind === "realm"));
+  for (const e of entries) {
+    const colors = LABEL_COLORS[e.kind] ?? LABEL_COLORS.poi;
+    ctx.font = e.font;
+    ctx.lineWidth = Math.max(2, e.px * colors.haloScale);
+    ctx.strokeStyle = colors.halo;
+    ctx.fillStyle = colors.fill;
+    ctx.strokeText(e.text, e.x, e.y);
+    ctx.fillText(e.text, e.x, e.y);
   }
 }
 
