@@ -34,6 +34,12 @@ function toolTarget(tool, sea) {
  * @param {number} opts.y  world pixel y
  * @returns {number} cells touched
  */
+// The persistence codec quantizes deltas to Int8 (±1.27): accumulate past
+// that bound and the author's in-memory terrain silently diverges from what
+// every other client decodes. Clamp at the source instead.
+const EDIT_LIMIT = 1.27;
+const clampEdit = v => Math.max(-EDIT_LIMIT, Math.min(EDIT_LIMIT, v));
+
 export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x, y }) {
   const { grid, elevBase, sea } = base;
   const radiusPx = radius * grid.size;
@@ -50,11 +56,11 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, edits[c]);
     touched++;
 
-    if (tool === "raise") edits[c] += strength * falloff;
-    else if (tool === "lower") edits[c] -= strength * falloff;
+    if (tool === "raise") edits[c] = clampEdit(edits[c] + strength * falloff);
+    else if (tool === "lower") edits[c] = clampEdit(edits[c] - strength * falloff);
     else if (target !== null) {
       const current = Math.min(1, Math.max(0, elevBase[c] + edits[c]));
-      edits[c] += (target - current) * Math.min(1, strength * 10) * falloff;
+      edits[c] = clampEdit(edits[c] + (target - current) * Math.min(1, strength * 10) * falloff);
     }
     else if (tool === "smooth") {
       const nbs = grid.neighbors[c];
@@ -62,7 +68,7 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
       let sum = 0;
       for (const nb of nbs) sum += Math.min(1, Math.max(0, elevBase[nb] + edits[nb]));
       const current = Math.min(1, Math.max(0, elevBase[c] + edits[c]));
-      edits[c] += (sum / nbs.length - current) * Math.min(1, strength * 8) * falloff;
+      edits[c] = clampEdit(edits[c] + (sum / nbs.length - current) * Math.min(1, strength * 8) * falloff);
     }
   }
   return touched;
@@ -80,9 +86,10 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
  * @param {number} opts.radius  brush radius in cells
  * @param {number} opts.x  world pixel x
  * @param {number} opts.y  world pixel y
+ * @param {(c: number) => boolean} [opts.skip]  cells to leave untouched
  * @returns {number} cells touched
  */
-export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x, y }) {
+export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x, y, skip = null }) {
   const { grid } = base;
   const radiusPx = radius * grid.size;
   const r2 = radiusPx * radiusPx;
@@ -91,6 +98,7 @@ export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x,
     const dx = grid.cx[c] - x;
     const dy = grid.cy[c] - y;
     if (dx * dx + dy * dy > r2) continue;
+    if (skip?.(c)) continue;
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, overrides[c]);
     overrides[c] = biome;
     touched++;
@@ -98,6 +106,7 @@ export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x,
   return touched;
 }
 
+/** Nearest cell to a point, or -1 when the click is clearly off the map. */
 function nearestCell(grid, x, y) {
   let best = -1, bestD = Infinity;
   for (let c = 0; c < grid.n; c++) {
@@ -106,7 +115,7 @@ function nearestCell(grid, x, y) {
     const d = dx * dx + dy * dy;
     if (d < bestD) { bestD = d; best = c; }
   }
-  return best;
+  return bestD <= (grid.size * 1.5) ** 2 ? best : -1;
 }
 
 /**

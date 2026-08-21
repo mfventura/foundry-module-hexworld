@@ -96,7 +96,7 @@
   "HEXWORLD.RealmRename": "Renombrar el reino seleccionado…",
   "HEXWORLD.RealmDelete": "Eliminar el reino seleccionado…",
   "HEXWORLD.RealmDeleteTitle": "Eliminar reino",
-  "HEXWORLD.RealmDeleteConfirm": "¿Eliminar {name}? Su territorio pasará a tierras salvajes (el trazo se puede deshacer, el nombre no).",
+  "HEXWORLD.RealmDeleteConfirm": "¿Eliminar {name}? Su territorio pasará a tierras salvajes. Esta acción no se puede deshacer (además vacía el historial de deshacer).",
   "HEXWORLD.RealmCreated": "Reino fundado: pinta su territorio con el pincel de reino.",
   "HEXWORLD.RealmNoneSelected": "Selecciona primero un reino en la paleta.",
   "HEXWORLD.RealmLimit": "No caben más reinos (máximo 254).",

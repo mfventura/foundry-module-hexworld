@@ -71,6 +71,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   #painting = false;
   /** @type {{channel: "elev"|"biome"|"river", cells: Map<number, number>}|null} */
   #strokeUndo = null;
+  /** Stroke committed by the immediately-preceding _onClickLeft (same gesture). */
+  #lastClickStroke = null;
   /** @type {{channel: string, cells: Map<number, number>}[]} */
   #undoStack = [];
   /** @type {{channel: string, cells: Map<number, number>}[]} */
@@ -161,6 +163,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#undoStack = [];
     this.#redoStack = [];
     this.#strokeUndo = null;
+    this.#lastClickStroke = null;
     this.#painting = false;
     this.#routeAnchor = -1;
     this.base = this.edits = this.overrides = this.riverEdits = null;
@@ -268,14 +271,28 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (!this.#canPaint()) return;
     const p = event.interactionData?.origin;
     if (!p) return;
+    this.#lastClickStroke = null;
     this.#beginStroke();
     this.#paintAt(p);
+    const stroke = this.#strokeUndo;
     this.#endStroke();
+    // MIM fires clickLeft on pointerdown and the same gesture may continue
+    // into a drag: remember the stroke so _onDragLeftStart can ADOPT it
+    // instead of painting the origin a second time.
+    if (stroke?.cells.size) this.#lastClickStroke = stroke;
   }
 
   _onDragLeftStart(event) {
     if (!this.#canPaint()) return;
     this.#painting = true;
+    const adopted = this.#lastClickStroke;
+    this.#lastClickStroke = null;
+    if (adopted && this.#undoStack[this.#undoStack.length - 1] === adopted) {
+      // Continue the click's stroke: origin already painted and recorded.
+      this.#undoStack.pop();
+      this.#strokeUndo = adopted;
+      return;
+    }
     this.#beginStroke();
     const p = event.interactionData?.origin;
     if (p) this.#paintAt(p);
@@ -298,7 +315,17 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     super._onDragLeftCancel?.(event);
     if (!this.#painting) return;
     this.#painting = false;
-    this.#endStroke();
+    // A canceled drag reverts instead of committing: the pre-stroke values
+    // are already recorded in the stroke's cells map.
+    if (this.#strokeUndo?.cells.size) this.#applyStroke(this.#strokeUndo);
+    if (this.#dragLabel) {
+      this.labelOffsets = { ...this.labelOffsets };
+      if (this.#dragLabel.prev) this.labelOffsets[this.#dragLabel.key] = this.#dragLabel.prev;
+      else delete this.labelOffsets[this.#dragLabel.key];
+    }
+    this.#strokeUndo = null;
+    this.#dragLabel = null;
+    this.#refresh();
   }
 
   #paintAt(point) {
@@ -314,7 +341,12 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       if (!this.world) return;
       if (!this.#dragLabel) {
         const e = labelAt(this.world, x, y, this.world.grid.size * 1.2);
-        if (e) this.#dragLabel = { key: e.key, bx: e.bx, by: e.by };
+        if (e) {
+          this.#dragLabel = {
+            key: e.key, bx: e.bx, by: e.by,
+            prev: this.labelOffsets[e.key] ?? null // restored on drag cancel
+          };
+        }
         return;
       }
       this.labelOffsets = {
@@ -356,7 +388,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     } else if (tool === "realm") {
       this.realms ??= new Uint8Array(this.base.grid.n);
       applyBiomeBrush(this.base, this.realms, this.#strokeUndo?.cells, {
-        biome: this.brush.realm, radius: this.brush.radius, x, y
+        biome: this.brush.realm, radius: this.brush.radius, x, y,
+        // Realms are a land-only channel (generateRealms enforces the same);
+        // the wilderness eraser may still clean up water cells.
+        skip: this.brush.realm > 0 ? (c => !!this.world?.isWater[c]) : null
       });
     } else if (RIVER_TOOLS.has(tool)) {
       if (!this.world) return;
@@ -455,7 +490,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const value = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize("HEXWORLD.RenameTitle") },
       content: `<div class="form-group"><label>${game.i18n.localize("HEXWORLD.NameLabel")}</label>
-        <input type="text" name="featureName" value="${current.replace(/"/g, "&quot;")}" autofocus></div>`,
+        <input type="text" name="featureName" value="${foundry.utils.escapeHTML(current)}" autofocus></div>`,
       ok: {
         label: "HEXWORLD.Save",
         callback: (_event, button) => button.form.elements.featureName.value.trim()
@@ -515,7 +550,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       ui.notifications.warn(game.i18n.localize("HEXWORLD.RealmLimit"));
       return;
     }
-    const suggested = i18nNamePatterns().realm(makeNamer(() => Math.random())());
+    // Suggestion seeded from existing names so it cannot collide with them
+    // (it is only a dialog default the GM can edit freely).
+    const usedNames = new Set(Object.values(this.names ?? {}));
+    const suggested = i18nNamePatterns().realm(makeNamer(() => Math.random(), usedNames)());
     const named = await this.#promptRename(`k${id}`, suggested);
     if (!named) return;
     this.brush.realm = id;
@@ -533,7 +571,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     await this.#promptRename(`k${id}`);
   }
 
-  /** Delete the selected realm: its land becomes wilderness (undoable). */
+  /** Delete the selected realm: its land becomes wilderness (not undoable). */
   async deleteSelectedRealm() {
     const id = this.brush.realm;
     if (!id || !this.realmIdsInUse().has(id)) {
@@ -543,32 +581,34 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     const name = this.names?.[`k${id}`] ?? `${game.i18n.localize("HEXWORLD.RealmsTitle")} ${id}`;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: game.i18n.localize("HEXWORLD.RealmDeleteTitle") },
-      content: `<p>${game.i18n.format("HEXWORLD.RealmDeleteConfirm", { name })}</p>`,
+      content: `<p>${game.i18n.format("HEXWORLD.RealmDeleteConfirm", { name: foundry.utils.escapeHTML(name) })}</p>`,
       rejectClose: false
     });
     if (!confirmed) return;
 
-    // Clear the territory as an undoable stroke (the name is not restored).
+    // Clear the territory. NOT undoable: createRealm reuses freed ids, so an
+    // undone delete could graft this territory onto a future realm — both
+    // stacks are dropped instead (the confirm dialog says so).
     if (this.realms) {
-      const cells = new Map();
       for (let c = 0; c < this.realms.length; c++) {
-        if (this.realms[c] === id) {
-          cells.set(c, id);
-          this.realms[c] = 0;
-        }
-      }
-      if (cells.size) {
-        this.#undoStack.push({ channel: "realm", cells });
-        if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
-        this.#redoStack = [];
+        if (this.realms[c] === id) this.realms[c] = 0;
       }
     }
+    this.#undoStack = [];
+    this.#redoStack = [];
     this.names = { ...this.names };
     delete this.names[`k${id}`];
+    // Drop the realm's manual label offset too, or a future realm reusing
+    // this id would inherit a pinned label position out of nowhere.
+    this.labelOffsets = { ...this.labelOffsets };
+    delete this.labelOffsets[`k${id}`];
     this.brush.realm = [...this.realmIdsInUse()].sort((a, b) => a - b)[0] ?? 0;
     this.#refresh();
     this.#hud?.render();
-    await canvas.scene?.update({ [`flags.hexworld.names.-=k${id}`]: null }, { hexworldLocal: true });
+    await canvas.scene?.update({
+      [`flags.hexworld.names.-=k${id}`]: null,
+      [`flags.hexworld.labels.-=k${id}`]: null
+    }, { hexworldLocal: true });
     await this.#persist();
   }
 

@@ -106,6 +106,10 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   #tool = "raise";
   #brushBiome = PAINTABLE_BIOMES[0].id;
+  // Brush settings live in app state, not the DOM: a re-render (e.g. icon
+  // settings changed) must not silently reset them.
+  #brushRadius = 3;
+  #brushStrength = 0.06;
   #viewMode = "terrain";
   #painting = false;
   /** @type {{channel: "elev"|"biome"|"river", cells: Map<number, number>}|null} */
@@ -255,6 +259,17 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       canvas.addEventListener("pointermove", ev => this.#onHover(ev));
       canvas.addEventListener("pointerleave", () => this.#onHoverEnd());
       canvas.addEventListener("contextmenu", ev => this.#onCanvasContext(ev));
+    }
+
+    // Brush sliders: restore from state and track changes.
+    for (const [name, get, set] of [
+      ["brushRadius", () => this.#brushRadius, v => { this.#brushRadius = v; }],
+      ["brushStrength", () => this.#brushStrength, v => { this.#brushStrength = v; }]
+    ]) {
+      const input = root.querySelector(`input[name=${name}]`);
+      if (!input) continue;
+      input.value = String(get());
+      input.addEventListener("input", () => set(Number(input.value)));
     }
 
     // False-color view selector.
@@ -510,10 +525,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
   }
 
   #brushSettings() {
-    const bar = this.element.querySelector(".hw-editbar");
-    const radius = Number(bar?.querySelector("input[name=brushRadius]")?.value ?? 3);
-    const strength = Number(bar?.querySelector("input[name=brushStrength]")?.value ?? 0.06);
-    return { radius, strength };
+    return { radius: this.#brushRadius, strength: this.#brushStrength };
   }
 
   #onPaintStart(ev) {
@@ -662,7 +674,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const value = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize("HEXWORLD.RenameTitle") },
       content: `<div class="form-group"><label>${game.i18n.localize("HEXWORLD.NameLabel")}</label>
-        <input type="text" name="featureName" value="${current.replace(/"/g, "&quot;")}" autofocus></div>`,
+        <input type="text" name="featureName" value="${foundry.utils.escapeHTML(current)}" autofocus></div>`,
       ok: {
         label: "HEXWORLD.Save",
         callback: (_event, button) => button.form.elements.featureName.value.trim()
@@ -747,10 +759,23 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     this.#world.roads = roads;
     this.#realms = generateRealms(this.#world, sites, params.realms ?? 0.5);
     this.#world.realms = this.#realms;
-    this.#names = generateNames(this.#world, sites, null, makeRng(params.seed + ":names"), i18nNamePatterns());
+    // Sites/realms are replaced, so their names/offsets are rebuilt — but
+    // manual names and pinned labels of WATERS (rivers/lakes/seas), which a
+    // settlements regen does not touch, must survive.
+    const keepWater = map => {
+      const kept = {};
+      for (const [k, v] of Object.entries(map ?? {})) {
+        if (k.startsWith("r") || k.startsWith("l")) kept[k] = v;
+      }
+      return kept;
+    };
+    this.#names = generateNames(
+      this.#world, sites, keepWater(this.#names), makeRng(params.seed + ":names"), i18nNamePatterns()
+    );
     this.#world.names = this.#names;
-    this.#labelOffsets = null; // fresh names, fresh automatic layout
-    this.#world.labelOffsets = {};
+    const keptOffsets = keepWater(this.#labelOffsets);
+    this.#labelOffsets = Object.keys(keptOffsets).length ? keptOffsets : null;
+    this.#world.labelOffsets = keptOffsets;
     // Wholesale replacement is not stroke-undoable: drop stale history.
     this.#undoStack = [];
     this.#redoStack = [];
@@ -812,9 +837,6 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!this.#editScene || !this.#world) return;
     target.disabled = true;
     try {
-      // Object flags merge on update, so replace the sparse maps wholesale:
-      // clear them first, then write the current ones (if any).
-      await this.#editScene.update({ "flags.hexworld.-=names": null, "flags.hexworld.-=labels": null });
       const update = {
         "flags.hexworld.seed": this.#world.params.seed,
         "flags.hexworld.params": this.#world.params,
@@ -826,12 +848,18 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         "flags.hexworld.realms": encodeBytes(this.#realms),
         "flags.hexworld.stats": this.#world.stats
       };
-      if (this.#names && Object.keys(this.#names).length) {
-        update["flags.hexworld.names"] = this.#names;
-      }
-      if (this.#labelOffsets && Object.keys(this.#labelOffsets).length) {
-        update["flags.hexworld.labels"] = this.#labelOffsets;
-      }
+      // Sparse maps merge on update: replace them ATOMICALLY by deleting the
+      // stale keys and setting the new ones in this same update — a separate
+      // clear-then-write pair could lose every name if the second write fails.
+      const sceneFlags = this.#editScene.flags?.hexworld ?? {};
+      const replaceMap = (field, next) => {
+        for (const k of Object.keys(sceneFlags[field] ?? {})) {
+          if (!next || !(k in next)) update[`flags.hexworld.${field}.-=${k}`] = null;
+        }
+        if (next && Object.keys(next).length) update[`flags.hexworld.${field}`] = next;
+      };
+      replaceMap("names", this.#names);
+      replaceMap("labels", this.#labelOffsets);
       await this.#editScene.update(update);
       ui.notifications.info(game.i18n.format("HEXWORLD.NotifySceneUpdated", { name: this.#editScene.name }));
     } catch (err) {

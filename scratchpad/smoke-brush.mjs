@@ -81,6 +81,11 @@ applyBrush(base, edits2, null, { tool: "mountain", radius: 1, strength: 0.1, ...
 const w2 = deriveWorld(base, edits2);
 assert([14, 15].includes(w2.biome[landCell]), "full-strength mountain converges in one touch");
 
+// --- Edits stay within the Int8 codec range (author/client desync guard).
+const editsClamp = new Float32Array(base.grid.n);
+for (let k = 0; k < 60; k++) applyBrush(base, editsClamp, null, { tool: "raise", radius: 2, strength: 0.15, ...at(landCell) });
+assert(editsClamp.every(v => v <= 1.27 && v >= -1.27), `edits clamped to ±1.27 (max ${Math.max(...editsClamp).toFixed(2)})`);
+
 // --- No NaN, determinism, sea untouched.
 assert(w.elev.every(Number.isFinite), "no NaN in elevation");
 assert(w.sea === before.sea, "sea level stayed frozen");

@@ -150,7 +150,9 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
     this.element.querySelector(".hw-sea-btn")?.addEventListener("click", () => this.#openSeaDialog());
 
     // Cell inspector: follow the canvas pointer while the layer is active.
+    // off-before-on: re-renders (palette refreshes) must not stack listeners.
     this.#onStageMove ??= ev => this.#inspect(ev);
+    canvas.stage.off("pointermove", this.#onStageMove);
     canvas.stage.on("pointermove", this.#onStageMove);
   }
 

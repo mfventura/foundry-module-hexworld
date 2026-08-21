@@ -145,12 +145,18 @@ export function layoutLabels(world, measure = defaultMeasure) {
 
 /** The layout entry nearest to a point (within maxDist of its box), or null. */
 export function labelAt(world, x, y, maxDist) {
+  if (world.showLabels === false) return null; // hidden labels are not draggable
   let best = null, bd = Infinity;
   for (const e of layoutLabels(world)) {
     const dx = Math.max(Math.abs(x - e.x) - e.w / 2, 0);
     const dy = Math.max(Math.abs(y - e.y) - e.h / 2, 0);
     const d = Math.sqrt(dx * dx + dy * dy);
-    if (d < bd) { bd = d; best = e; }
+    // Ties (a small label inside a big realm label's box) go to the SMALLER
+    // box, or the big one would make the inner label ungrabbable.
+    if (d < bd || (d === bd && best && e.w * e.h < best.w * best.h)) {
+      bd = d;
+      best = e;
+    }
   }
   return best && bd <= maxDist ? best : null;
 }

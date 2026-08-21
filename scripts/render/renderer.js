@@ -227,8 +227,9 @@ function drawRealms(ctx, world, mode) {
         const d = dx * dx + dy * dy;
         if (d < bestD) { bestD = d; best = nb; }
       }
+      // Ties (exact on square grids) mean a real shared edge — see drawCoast.
       const dxc = grid.cx[c] - mx, dyc = grid.cy[c] - my;
-      if (best < 0 || bestD >= dxc * dxc + dyc * dyc) continue; // map border edge
+      if (best < 0 || bestD > dxc * dxc + dyc * dyc) continue; // map border edge
       if (isWater[best] || realms[best] === id) continue;
       // Draw each border edge once, from the higher realm id side.
       if (id < (realms[best] ?? 0)) continue;
@@ -381,9 +382,11 @@ function drawCoast(ctx, world) {
         const d = dx * dx + dy * dy;
         if (d < bestD) { bestD = d; best = nb; }
       }
-      // Also compare against the cell itself: border edges have no neighbor across.
+      // Also compare against the cell itself: border edges have no neighbor
+      // across. The shared edge lies ON the bisector, so the distances TIE
+      // (exactly, on square grids) — the comparison must accept equality.
       const dxc = grid.cx[c] - mx, dyc = grid.cy[c] - my;
-      if (best >= 0 && bestD < dxc * dxc + dyc * dyc && isWater[best]) {
+      if (best >= 0 && bestD <= dxc * dxc + dyc * dyc && isWater[best]) {
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
       }

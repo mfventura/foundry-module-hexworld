@@ -10,7 +10,6 @@
  */
 
 import { SITE } from "./sites.js";
-import { realmCapitals } from "./realms.js";
 
 const ONSETS = [
   "Val", "Bel", "Cor", "Dor", "Fal", "Gal", "Hel", "Kar", "Lor", "Mar", "Mor",
@@ -215,12 +214,22 @@ export function generateNames(world, sites, existing, rng, patterns = null) {
   for (const w of anchors.waters) {
     if (!names[w.key]) names[w.key] = (w.isSea ? P.sea : P.lake)(namer());
   }
-  // Realms are named after their capital city when it has a name.
+  // Realms are named after their capital city when it has a name. The
+  // capital is resolved from the CHANNELS (a city standing on the realm's
+  // own territory), never by index order — freely edited sites would desync
+  // a positional mapping.
   if (anchors.realms.length) {
-    const capitals = realmCapitals(world, sites);
+    const capitalByRealm = new Map();
+    if (sites && world.realms) {
+      for (let c = 0; c < world.grid.n; c++) {
+        if (sites[c] !== SITE.CITY) continue;
+        const id = world.realms[c];
+        if (id && !capitalByRealm.has(id)) capitalByRealm.set(id, c);
+      }
+    }
     for (const r of anchors.realms) {
       if (names[r.key]) continue;
-      const capital = capitals[r.id - 1];
+      const capital = capitalByRealm.get(r.id);
       const capitalName = capital != null ? names[`s${capital}`] : null;
       names[r.key] = P.realm(capitalName || namer());
     }
