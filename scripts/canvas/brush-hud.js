@@ -72,12 +72,9 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
     };
   }
 
-  /** One swatch per realm present in the channel, plus the wilderness eraser. */
+  /** One swatch per realm in use (painted or merely named) + wilderness eraser. */
   #realmSwatches() {
-    const realms = this.layer.realms;
-    if (!realms) return [];
-    const ids = [...new Set(realms)].filter(id => id > 0).sort((a, b) => a - b);
-    if (!ids.length) return [];
+    const ids = [...this.layer.realmIdsInUse()].sort((a, b) => a - b);
     const out = ids.map(id => {
       const [r, g, b] = REALM_COLORS[(id - 1) % REALM_COLORS.length];
       return {
@@ -87,11 +84,13 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         active: this.layer.brush.realm === id
       };
     });
-    out.push({
-      id: 0, color: "rgba(0,0,0,0.35)", erase: true,
-      label: game.i18n.localize("HEXWORLD.RealmWilderness"),
-      active: this.layer.brush.realm === 0
-    });
+    if (out.length) {
+      out.push({
+        id: 0, color: "rgba(0,0,0,0.35)", erase: true,
+        label: game.i18n.localize("HEXWORLD.RealmWilderness"),
+        active: this.layer.brush.realm === 0
+      });
+    }
     return out;
   }
 
@@ -137,6 +136,10 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         activateHexTab("sites", "realm");
       });
     }
+
+    this.element.querySelector(".hw-realm-new")?.addEventListener("click", () => this.layer.createRealm());
+    this.element.querySelector(".hw-realm-rename")?.addEventListener("click", () => this.layer.renameSelectedRealm());
+    this.element.querySelector(".hw-realm-delete")?.addEventListener("click", () => this.layer.deleteSelectedRealm());
 
     const viewSel = this.element.querySelector("select[name=viewMode]");
     viewSel?.addEventListener("change", () => this.layer.setViewMode(viewSel.value));

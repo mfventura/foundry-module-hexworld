@@ -12,7 +12,7 @@ import { buildBase, deriveWorld } from "../generator/worldgen.js";
 import { applyBrush, applyBiomeBrush, applyRiverTool } from "../generator/brush.js";
 import { B } from "../generator/biomes.js";
 import { SITE, routeRoad } from "../generator/sites.js";
-import { nameKeyAt } from "../generator/names.js";
+import { nameKeyAt, makeNamer, i18nNamePatterns } from "../generator/names.js";
 import {
   encodeEdits, decodeEdits, encodeOverrides, decodeOverrides,
   encodeBytes, decodeBytes, NO_OVERRIDE
@@ -21,6 +21,7 @@ import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 import { cellIndexAt } from "../ui/cell-info.js";
 import { siteRenderContext } from "../render/site-icons.js";
+import { activateHexTab } from "../ui/tool-tabs.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
@@ -398,17 +399,9 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.#persist();
   }
 
-  /** Rename (or name) the feature under the pointer via a small dialog. */
-  async #renameAt(x, y) {
-    if (!this.world) return;
-    const c = cellIndexAt(this.world, x, y);
-    if (c < 0) return;
-    const key = nameKeyAt(this.world, this.sites, c);
-    if (!key) {
-      ui.notifications.info(game.i18n.localize("HEXWORLD.RenameNothing"));
-      return;
-    }
-    const current = this.names?.[key] ?? "";
+  /** Name-edit dialog for a key; persists and repaints. @returns {Promise<boolean>} changed */
+  async #promptRename(key, initial = null) {
+    const current = this.names?.[key] ?? initial ?? "";
     const value = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize("HEXWORLD.RenameTitle") },
       content: `<div class="form-group"><label>${game.i18n.localize("HEXWORLD.NameLabel")}</label>
@@ -419,7 +412,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       },
       rejectClose: false
     });
-    if (value === null || value === undefined || value === current) return;
+    if (value === null || value === undefined || value === (this.names?.[key] ?? "")) return false;
     this.names = { ...this.names };
     let update;
     if (value) {
@@ -430,7 +423,103 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
       update = { [`flags.hexworld.names.-=${key}`]: null };
     }
     this.repaint();
+    this.#hud?.render();
     await canvas.scene?.update(update, { hexworldLocal: true });
+    return true;
+  }
+
+  /** Rename (or name) the feature under the pointer via a small dialog. */
+  async #renameAt(x, y) {
+    if (!this.world) return;
+    const c = cellIndexAt(this.world, x, y);
+    if (c < 0) return;
+    const key = nameKeyAt(this.world, this.sites, c);
+    if (!key) {
+      ui.notifications.info(game.i18n.localize("HEXWORLD.RenameNothing"));
+      return;
+    }
+    await this.#promptRename(key);
+  }
+
+  /* -------------------------------------------- */
+  /*  Realm management (HUD buttons)               */
+  /* -------------------------------------------- */
+
+  /** Realm ids in use: painted in the channel or holding a name. */
+  realmIdsInUse() {
+    const ids = new Set();
+    if (this.realms) for (const v of this.realms) if (v) ids.add(v);
+    for (const k of Object.keys(this.names ?? {})) {
+      if (/^k\d+$/.test(k)) ids.add(Number(k.slice(1)));
+    }
+    return ids;
+  }
+
+  /** Found a new realm: pick a name, select it in the palette, paint away. */
+  async createRealm() {
+    if (!this.world) return;
+    const used = this.realmIdsInUse();
+    let id = 1;
+    while (used.has(id) && id < 255) id++;
+    if (used.has(id)) {
+      ui.notifications.warn(game.i18n.localize("HEXWORLD.RealmLimit"));
+      return;
+    }
+    const suggested = i18nNamePatterns().realm(makeNamer(() => Math.random())());
+    const named = await this.#promptRename(`k${id}`, suggested);
+    if (!named) return;
+    this.brush.realm = id;
+    activateHexTab("sites", "realm");
+    ui.notifications.info(game.i18n.localize("HEXWORLD.RealmCreated"));
+  }
+
+  /** Rename the realm currently selected in the palette. */
+  async renameSelectedRealm() {
+    const id = this.brush.realm;
+    if (!id || !this.realmIdsInUse().has(id)) {
+      ui.notifications.info(game.i18n.localize("HEXWORLD.RealmNoneSelected"));
+      return;
+    }
+    await this.#promptRename(`k${id}`);
+  }
+
+  /** Delete the selected realm: its land becomes wilderness (undoable). */
+  async deleteSelectedRealm() {
+    const id = this.brush.realm;
+    if (!id || !this.realmIdsInUse().has(id)) {
+      ui.notifications.info(game.i18n.localize("HEXWORLD.RealmNoneSelected"));
+      return;
+    }
+    const name = this.names?.[`k${id}`] ?? `${game.i18n.localize("HEXWORLD.RealmsTitle")} ${id}`;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize("HEXWORLD.RealmDeleteTitle") },
+      content: `<p>${game.i18n.format("HEXWORLD.RealmDeleteConfirm", { name })}</p>`,
+      rejectClose: false
+    });
+    if (!confirmed) return;
+
+    // Clear the territory as an undoable stroke (the name is not restored).
+    if (this.realms) {
+      const cells = new Map();
+      for (let c = 0; c < this.realms.length; c++) {
+        if (this.realms[c] === id) {
+          cells.set(c, id);
+          this.realms[c] = 0;
+        }
+      }
+      if (cells.size) {
+        this.#undoStack.push({ channel: "realm", cells });
+        if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
+        this.#redoStack = [];
+      }
+    }
+    this.names = { ...this.names };
+    delete this.names[`k${id}`];
+    this.brush.realm = [...this.realmIdsInUse()].sort((a, b) => a - b)[0] ?? 0;
+    this.#refresh();
+    this.#hud?.render();
+    await canvas.scene?.update({ [`flags.hexworld.names.-=k${id}`]: null }, { hexworldLocal: true });
+    await this.#persist();
   }
 
   /* -------------------------------------------- */

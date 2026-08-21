@@ -339,6 +339,24 @@
   cursor: pointer;
 }
 
+#hexworld-brush-hud .hw-hud-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+#hexworld-brush-hud .hw-hud-actions button {
+  flex: 1;
+  height: 22px;
+  font-size: 11px;
+  line-height: 1;
+  color: #eee;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 #hexworld-brush-hud .hw-hud-info {
   margin-top: 5px;
   min-height: 14px;

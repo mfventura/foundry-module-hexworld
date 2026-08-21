@@ -40,7 +40,6 @@
             data-tooltip="{{label}}"><i class="{{icon}}"></i></button>
     {{/each}}
   </div>
-  {{#if realmSwatches.length}}
   <div class="hw-hud-subtitle">{{localize "HEXWORLD.RealmsTitle"}}</div>
   <div class="hw-palette">
     {{#each realmSwatches}}
@@ -48,7 +47,17 @@
             data-tooltip="{{label}}" style="--swatch: {{color}}">{{#if erase}}<i class="fa-solid fa-eraser"></i>{{/if}}</button>
     {{/each}}
   </div>
-  {{/if}}
+  <div class="hw-hud-actions">
+    <button type="button" class="hw-realm-new" data-tooltip="{{localize 'HEXWORLD.RealmNew'}}">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+    <button type="button" class="hw-realm-rename" data-tooltip="{{localize 'HEXWORLD.RealmRename'}}">
+      <i class="fa-solid fa-signature"></i>
+    </button>
+    <button type="button" class="hw-realm-delete" data-tooltip="{{localize 'HEXWORLD.RealmDelete'}}">
+      <i class="fa-solid fa-trash"></i>
+    </button>
+  </div>
   <button type="button" class="hw-sea-btn"><i class="fa-solid fa-arrow-up-from-water-pump"></i> {{localize "HEXWORLD.SeaLevel"}}</button>
   <div class="hw-hud-info"></div>
 </div>
