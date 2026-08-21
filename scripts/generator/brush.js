@@ -40,18 +40,62 @@ function toolTarget(tool, sea) {
 const EDIT_LIMIT = 1.27;
 const clampEdit = v => Math.max(-EDIT_LIMIT, Math.min(EDIT_LIMIT, v));
 
+/** Pointer→cell via the foundry grid (bounds-checked); -1 off the map. */
+export function cellAt(grid, x, y) {
+  if (x < 0 || y < 0 || x > grid.pixelWidth || y > grid.pixelHeight) return -1;
+  let o;
+  try {
+    o = grid.foundryGrid.getOffset({ x, y });
+  } catch (_err) {
+    return -1;
+  }
+  if (!o || o.i < 0 || o.j < 0 || o.i >= grid.rows || o.j >= grid.cols) return -1;
+  return grid.index(o.i, o.j);
+}
+
+/**
+ * Cells within radiusPx of a point: a bounded neighbor expansion from the
+ * pointer's cell instead of scanning every cell of the map per brush tick.
+ * The pointer is clamped into the map so brushing along the border works.
+ */
+function cellsWithin(grid, x, y, radiusPx) {
+  const cx = Math.min(grid.pixelWidth - 1, Math.max(0, x));
+  const cy = Math.min(grid.pixelHeight - 1, Math.max(0, y));
+  const start = cellAt(grid, cx, cy);
+  if (start < 0) return [];
+  const r2 = radiusPx * radiusPx;
+  const maxHops = Math.ceil(radiusPx / grid.size) + 2;
+  const out = [];
+  const seen = new Set([start]);
+  let frontier = [start];
+  for (let hop = 0; hop <= maxHops && frontier.length; hop++) {
+    const next = [];
+    for (const c of frontier) {
+      const dx = grid.cx[c] - x;
+      const dy = grid.cy[c] - y;
+      if (dx * dx + dy * dy <= r2) out.push(c);
+      for (const nb of grid.neighbors[c]) {
+        if (!seen.has(nb)) {
+          seen.add(nb);
+          next.push(nb);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return out;
+}
+
 export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x, y }) {
   const { grid, elevBase, sea } = base;
   const radiusPx = radius * grid.size;
-  const r2 = radiusPx * radiusPx;
   const target = toolTarget(tool, sea);
   let touched = 0;
 
-  for (let c = 0; c < grid.n; c++) {
+  for (const c of cellsWithin(grid, x, y, radiusPx)) {
     const dx = grid.cx[c] - x;
     const dy = grid.cy[c] - y;
     const d2 = dx * dx + dy * dy;
-    if (d2 > r2) continue;
     const falloff = (1 - Math.sqrt(d2) / radiusPx) ** 2;
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, edits[c]);
     touched++;
@@ -91,31 +135,14 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
  */
 export function applyBiomeBrush(base, overrides, strokeUndo, { biome, radius, x, y, skip = null }) {
   const { grid } = base;
-  const radiusPx = radius * grid.size;
-  const r2 = radiusPx * radiusPx;
   let touched = 0;
-  for (let c = 0; c < grid.n; c++) {
-    const dx = grid.cx[c] - x;
-    const dy = grid.cy[c] - y;
-    if (dx * dx + dy * dy > r2) continue;
+  for (const c of cellsWithin(grid, x, y, radius * grid.size)) {
     if (skip?.(c)) continue;
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, overrides[c]);
     overrides[c] = biome;
     touched++;
   }
   return touched;
-}
-
-/** Nearest cell to a point, or -1 when the click is clearly off the map. */
-function nearestCell(grid, x, y) {
-  let best = -1, bestD = Infinity;
-  for (let c = 0; c < grid.n; c++) {
-    const dx = grid.cx[c] - x;
-    const dy = grid.cy[c] - y;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = c; }
-  }
-  return bestD <= (grid.size * 1.5) ** 2 ? best : -1;
 }
 
 /**
@@ -135,7 +162,7 @@ function nearestCell(grid, x, y) {
  */
 export function applyRiverTool(world, riverEdits, strokeUndo, { tool, x, y }) {
   const { grid, isWater, isRiver, flowTo } = world;
-  const start = nearestCell(grid, x, y);
+  const start = cellAt(grid, x, y);
   if (start < 0) return 0;
   let touched = 0;
   const set = (c, v) => {

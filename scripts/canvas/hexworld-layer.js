@@ -23,6 +23,7 @@ import { cellIndexAt } from "../ui/cell-info.js";
 import { siteRenderContext } from "../render/site-icons.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
 import { labelAt } from "../render/labels.js";
+import { worldFlags } from "../lib/flags.js";
 
 const UNDO_LIMIT = 20;
 const RIVER_TOOLS = new Set(["riverAdd", "riverRemove"]);
@@ -81,6 +82,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   /** @type {PIXI.Graphics|null} */
   #cursor = null;
   #onCursorMove = null;
+  /** Serialized params of the current base (rebuild cache key). */
+  #baseKey = null;
 
   /** Whether the viewed scene is a HexWorld data-driven scene. */
   get isHexWorldScene() {
@@ -180,6 +183,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.world.names = this.names;
     this.world.labelOffsets = this.labelOffsets;
     this.world.showLabels = this.showLabels;
+    this.world._labelLayout = null; // anything visual may have moved
   }
 
   /** Rebuild the world from the viewed scene's flags and (re)render it. */
@@ -187,11 +191,16 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     // Respect a HUD the GM deliberately closed: only restore it if it was
     // open (or never created — first activation opens it anyway).
     const hudWasOpen = this.#hud ? this.#hud.rendered : true;
+    const f = worldFlags(canvas.scene);
+    // The base (grid + heightmap + moisture noise) only depends on params:
+    // reuse it across rebuilds triggered by edits/names-only updates.
+    const paramsKey = f ? JSON.stringify(f.params) : null;
+    const reusableBase = paramsKey && paramsKey === this.#baseKey ? this.base : null;
     this.#destroyState();
-    const f = canvas.scene?.flags?.hexworld;
-    if (!f?.params || (f.version ?? 1) < 2) return;
+    this.#baseKey = paramsKey;
+    if (!f) return;
     try {
-      this.base = buildBase(f.params);
+      this.base = reusableBase ?? buildBase(f.params);
       this.edits = decodeEdits(f.edits ?? null, this.base.grid.n);
       this.overrides = decodeOverrides(f.biomes ?? null, this.base.grid.n);
       this.riverEdits = decodeBytes(f.rivers ?? null, this.base.grid.n);
@@ -251,9 +260,23 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     if (RIVER_TOOLS.has(tool)) return "river";
     if (tool === "site") return "site";
     if (tool === "realm") return "realm";
+    if (tool === "labelMove") return "labels";
     if (ROUTE_TOOLS.has(tool) || tool === "roadErase") return "road";
     return "elev";
   }
+
+  /** Channels that never feed the derived pipeline: repaint, don't re-derive. */
+  static #OVERLAY_CHANNELS = new Set(["site", "road", "realm", "labels"]);
+  /** Scene-flag fields to persist per stroke channel. */
+  static #CHANNEL_FIELDS = {
+    elev: ["edits", "stats"],
+    biome: ["biomes", "stats"],
+    river: ["rivers", "stats"],
+    site: ["sites"],
+    road: ["roads"],
+    realm: ["realms"],
+    labels: ["labels"]
+  };
 
   #beginStroke() {
     this.#strokeUndo = {
@@ -451,15 +474,22 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   }
 
   #endStroke() {
-    if (this.#strokeUndo?.cells.size) {
-      this.#undoStack.push(this.#strokeUndo);
+    const stroke = this.#strokeUndo;
+    const painted = !!stroke?.cells.size;
+    const movedLabel = !!this.#dragLabel;
+    if (painted) {
+      this.#undoStack.push(stroke);
       if (this.#undoStack.length > UNDO_LIMIT) this.#undoStack.shift();
       this.#redoStack = []; // a new stroke invalidates the redo history
     }
     this.#strokeUndo = null;
     this.#dragLabel = null;
-    this.#refresh();
-    this.#persist();
+    // Nothing changed (route anchor click, rename dialog): keep view and DB.
+    if (!painted && !movedLabel) return;
+    const channel = movedLabel && !painted ? "labels" : stroke.channel;
+    if (HexWorldLayer.#OVERLAY_CHANNELS.has(channel)) this.repaint();
+    else this.#refresh();
+    this.#persist(HexWorldLayer.#CHANNEL_FIELDS[channel] ?? null);
   }
 
   /** Right-click with the label tool returns a label to its automatic spot. */
@@ -603,37 +633,45 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.labelOffsets = { ...this.labelOffsets };
     delete this.labelOffsets[`k${id}`];
     this.brush.realm = [...this.realmIdsInUse()].sort((a, b) => a - b)[0] ?? 0;
-    this.#refresh();
+    this.repaint();
     this.#hud?.render();
     await canvas.scene?.update({
       [`flags.hexworld.names.-=k${id}`]: null,
       [`flags.hexworld.labels.-=k${id}`]: null
     }, { hexworldLocal: true });
-    await this.#persist();
+    await this.#persist(["realms"]);
   }
 
   /* -------------------------------------------- */
   /*  Persistence and public actions               */
   /* -------------------------------------------- */
 
-  async #persist() {
+  /**
+   * Persist the given flag fields (null = everything): a stroke only writes
+   * its own channel instead of re-encoding all five arrays every time.
+   */
+  async #persist(fields = null) {
     const scene = canvas.scene;
     if (!scene || !this.world) return;
-    const update = {
-      "flags.hexworld.edits": encodeEdits(this.edits),
-      "flags.hexworld.biomes": encodeOverrides(this.overrides),
-      "flags.hexworld.rivers": encodeBytes(this.riverEdits),
-      "flags.hexworld.sites": encodeBytes(this.sites),
-      "flags.hexworld.roads": encodeBytes(this.roads),
-      "flags.hexworld.realms": encodeBytes(this.realms),
-      "flags.hexworld.stats": this.world.stats
-    };
+    const want = f => !fields || fields.includes(f);
+    const update = {};
+    if (want("edits")) update["flags.hexworld.edits"] = encodeEdits(this.edits);
+    if (want("biomes")) update["flags.hexworld.biomes"] = encodeOverrides(this.overrides);
+    if (want("rivers")) update["flags.hexworld.rivers"] = encodeBytes(this.riverEdits);
+    if (want("sites")) update["flags.hexworld.sites"] = encodeBytes(this.sites);
+    if (want("roads")) update["flags.hexworld.roads"] = encodeBytes(this.roads);
+    if (want("realms")) update["flags.hexworld.realms"] = encodeBytes(this.realms);
+    if (want("stats")) update["flags.hexworld.stats"] = this.world.stats;
     // Object flags merge on update: adding keys is safe, but clearing the
     // whole map (reset) needs the explicit deletion syntax.
-    if (this.names && Object.keys(this.names).length) update["flags.hexworld.names"] = this.names;
-    else update["flags.hexworld.-=names"] = null;
-    if (this.labelOffsets && Object.keys(this.labelOffsets).length) update["flags.hexworld.labels"] = this.labelOffsets;
-    else update["flags.hexworld.-=labels"] = null;
+    if (want("names")) {
+      if (this.names && Object.keys(this.names).length) update["flags.hexworld.names"] = this.names;
+      else update["flags.hexworld.-=names"] = null;
+    }
+    if (want("labels")) {
+      if (this.labelOffsets && Object.keys(this.labelOffsets).length) update["flags.hexworld.labels"] = this.labelOffsets;
+      else update["flags.hexworld.-=labels"] = null;
+    }
     await scene.update(update, { hexworldLocal: true });
   }
 
@@ -652,22 +690,22 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     return { channel: stroke.channel, cells: inverse };
   }
 
+  #applyHistory(stroke, into) {
+    const inverse = this.#applyStroke(stroke);
+    if (inverse) into.push(inverse);
+    if (HexWorldLayer.#OVERLAY_CHANNELS.has(stroke.channel)) this.repaint();
+    else this.#refresh();
+    this.#persist(HexWorldLayer.#CHANNEL_FIELDS[stroke.channel] ?? null);
+  }
+
   undo() {
     const stroke = this.#undoStack.pop();
-    if (!stroke) return;
-    const inverse = this.#applyStroke(stroke);
-    if (inverse) this.#redoStack.push(inverse);
-    this.#refresh();
-    this.#persist();
+    if (stroke) this.#applyHistory(stroke, this.#redoStack);
   }
 
   redo() {
     const stroke = this.#redoStack.pop();
-    if (!stroke) return;
-    const inverse = this.#applyStroke(stroke);
-    if (inverse) this.#undoStack.push(inverse);
-    this.#refresh();
-    this.#persist();
+    if (stroke) this.#applyHistory(stroke, this.#undoStack);
   }
 
   resetEdits() {

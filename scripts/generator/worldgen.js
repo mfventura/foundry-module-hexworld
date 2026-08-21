@@ -8,7 +8,7 @@ import { makeRng } from "../lib/random.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { WorldGrid } from "./grid.js";
 import { buildHeightmap, seaLevelFor } from "./heightmap.js";
-import { computeTemperature, computeMoisture } from "./climate.js";
+import { computeTemperature, computeMoisture, moistureNoiseField } from "./climate.js";
 import { computeHydrology, computeFlux, markRivers } from "./hydrology.js";
 import { assignBiomes, B } from "./biomes.js";
 
@@ -58,7 +58,9 @@ export function buildBase(params) {
   const algo = params.algo ?? 1;
   const elevBase = buildHeightmap(grid, makeRng(params.seed + ":elev"), params.template, algo);
   const sea = seaLevelFor(elevBase, params.waterFraction);
-  return { params, grid, elevBase, sea, algo };
+  // Seed-only moisture noise: computed once here, reused by every derive.
+  const moistNoise = moistureNoiseField(grid, makeRng(params.seed + ":moist"));
+  return { params, grid, elevBase, sea, algo, moistNoise };
 }
 
 /**
@@ -89,7 +91,7 @@ export function deriveWorld(base, edits, overrides = null, riverEdits = null) {
   const { isOcean, isLake, isWater, filled } = computeHydrology(grid, elev, sea);
   const temp = computeTemperature(grid, elev, sea, params.climate);
   const moist = computeMoisture(grid, makeRng(params.seed + ":moist"), isWater, params.moisture, {
-    algo: base.algo ?? 1, elev, sea
+    algo: base.algo ?? 1, elev, sea, noiseField: base.moistNoise ?? null
   });
   const { flowTo, flux } = computeFlux(grid, filled, isOcean, isLake, moist);
   const { isRiver, threshold } = markRivers(grid, flux, isWater, params.riverDensity, riverEdits);
@@ -99,7 +101,7 @@ export function deriveWorld(base, edits, overrides = null, riverEdits = null) {
     isOcean, isLake, isWater,
     temp, moist, flowTo, flux, isRiver,
     riverThreshold: threshold,
-    base, edits, overrides, riverEdits
+    edits, overrides, riverEdits
   };
   world.biome = assignBiomes(world);
   if (overrides) {

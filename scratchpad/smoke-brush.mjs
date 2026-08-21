@@ -4,30 +4,7 @@
  * Run: node smoke-brush.mjs
  */
 
-globalThis.CONST = { GRID_TYPES: { SQUARE: 1, HEXODDR: 2, HEXEVENR: 3, HEXODDQ: 4, HEXEVENQ: 5 } };
-globalThis.foundry = {
-  grid: {
-    SquareGrid: class {
-      constructor({ size }) { this.size = size; }
-      getCenterPoint({ i, j }) { return { x: (j + 0.5) * this.size, y: (i + 0.5) * this.size }; }
-      getVertices({ i, j }) {
-        const s = this.size;
-        return [
-          { x: j * s, y: i * s }, { x: (j + 1) * s, y: i * s },
-          { x: (j + 1) * s, y: (i + 1) * s }, { x: j * s, y: (i + 1) * s }
-        ];
-      }
-      getAdjacentOffsets({ i, j }) {
-        const out = [];
-        for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
-          if (di || dj) out.push({ i: i + di, j: j + dj, k: 0 });
-        }
-        return out;
-      }
-    },
-    HexagonalGrid: class {}
-  }
-};
+import "./mock-foundry.mjs";
 
 const root = "../scripts";
 const { buildBase, deriveWorld } = await import(`${root}/generator/worldgen.js`);

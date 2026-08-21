@@ -12,6 +12,7 @@ import { HexWorldLayer } from "./canvas/hexworld-layer.js";
 import { DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
 import { HexWorldIconConfig } from "./ui/icon-config.js";
 import { hexToolTab, activateHexTab, HEX_TAB_DEFAULT_TOOL } from "./ui/tool-tabs.js";
+import { worldFlags } from "./lib/flags.js";
 
 Hooks.once("init", () => {
   game.settings.register("hexworld", "lastParams", {
@@ -81,8 +82,7 @@ Hooks.once("ready", () => {
 /** Terrain editing controls, only for GMs on HexWorld data-driven scenes. */
 Hooks.on("getSceneControlButtons", controls => {
   if (!game.user?.isGM) return;
-  const flags = canvas?.scene?.flags?.hexworld;
-  if (!flags?.params || (flags.version ?? 1) < 2) return;
+  if (!worldFlags(canvas?.scene)) return;
 
   // v13+: SceneControls ya no activa canvas[control.layer]; el control debe
   // activar su capa (mismo patrón que WallsLayer.prepareSceneControls en el

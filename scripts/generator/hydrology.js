@@ -9,46 +9,13 @@
  *    through lakes and end at the sea.
  */
 
+import { MinHeap } from "../lib/heap.js";
+
 const EPS = 1e-5;
 
 /** Per-cell manual river edit states (0 = derived). */
 export const RIVER_FORCE = 1;
 export const RIVER_SUPPRESS = 2;
-
-class MinHeap {
-  constructor(keys) { this.keys = keys; this.heap = []; }
-  get size() { return this.heap.length; }
-  push(idx) {
-    const h = this.heap, k = this.keys;
-    h.push(idx);
-    let c = h.length - 1;
-    while (c > 0) {
-      const p = (c - 1) >> 1;
-      if (k[h[p]] <= k[h[c]]) break;
-      const t = h[p]; h[p] = h[c]; h[c] = t;
-      c = p;
-    }
-  }
-  pop() {
-    const h = this.heap, k = this.keys;
-    const top = h[0];
-    const last = h.pop();
-    if (h.length) {
-      h[0] = last;
-      let c = 0;
-      for (;;) {
-        const l = c * 2 + 1, r = l + 1;
-        let m = c;
-        if (l < h.length && k[h[l]] < k[h[m]]) m = l;
-        if (r < h.length && k[h[r]] < k[h[m]]) m = r;
-        if (m === c) break;
-        const t = h[m]; h[m] = h[c]; h[c] = t;
-        c = m;
-      }
-    }
-    return top;
-  }
-}
 
 /**
  * @returns {{isOcean: Uint8Array, isLake: Uint8Array, isWater: Uint8Array,
@@ -72,11 +39,13 @@ export function computeHydrology(grid, elev, sea) {
   }
 
   // --- Priority-flood depression filling, seeded from the map border ---
+  // A cell's filled value is final before it is pushed (visited guard), so a
+  // push-time priority snapshot is exact.
   const filled = Float32Array.from(elev);
   const visited = new Uint8Array(n);
-  const heap = new MinHeap(filled);
+  const heap = new MinHeap();
   for (let c = 0; c < n; c++) {
-    if (grid.isBorder(c)) { visited[c] = 1; heap.push(c); }
+    if (grid.isBorder(c)) { visited[c] = 1; heap.push(filled[c], c); }
   }
   while (heap.size) {
     const c = heap.pop();
@@ -85,7 +54,7 @@ export function computeHydrology(grid, elev, sea) {
       visited[nb] = 1;
       const floor = isOcean[nb] ? filled[c] : filled[c] + EPS;
       if (filled[nb] < floor) filled[nb] = floor;
-      heap.push(nb);
+      heap.push(filled[nb], nb);
     }
   }
 

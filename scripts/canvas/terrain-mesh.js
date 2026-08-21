@@ -31,7 +31,7 @@ export class TerrainMesh {
 
     if (!this.#sprite) {
       this.#texture = PIXI.Texture.from(this.#canvasEl);
-      const Cls = foundry.canvas.primary?.PrimarySpriteMesh ?? globalThis.PrimarySpriteMesh;
+      const Cls = foundry.canvas.primary.PrimarySpriteMesh;
       this.#sprite = new Cls({ texture: this.#texture, name: "hexworld-terrain" });
       // Sort below tiles (500) and tokens (700) at ground elevation.
       this.#sprite.elevation = 0;

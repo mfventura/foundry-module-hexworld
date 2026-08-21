@@ -2,28 +2,7 @@
  * Smoke test: pipeline versioning (algo 1 back-compat vs algo 2 features).
  * Run: node smoke-algo2.mjs
  */
-globalThis.CONST = { GRID_TYPES: { SQUARE: 1, HEXODDR: 2, HEXEVENR: 3, HEXODDQ: 4, HEXEVENQ: 5 } };
-globalThis.foundry = {
-  grid: {
-    SquareGrid: class {
-      constructor({ size }) { this.size = size; }
-      getCenterPoint({ i, j }) { return { x: (j + 0.5) * this.size, y: (i + 0.5) * this.size }; }
-      getVertices({ i, j }) {
-        const s = this.size;
-        return [
-          { x: j * s, y: i * s }, { x: (j + 1) * s, y: i * s },
-          { x: (j + 1) * s, y: (i + 1) * s }, { x: j * s, y: (i + 1) * s }
-        ];
-      }
-      getAdjacentOffsets({ i, j }) {
-        const out = [];
-        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (a || b) out.push({ i: i + a, j: j + b, k: 0 });
-        return out;
-      }
-    },
-    HexagonalGrid: class {}
-  }
-};
+import "./mock-foundry.mjs";
 
 const root = "../scripts";
 const { buildBase, generateWorld } = await import(`${root}/generator/worldgen.js`);

@@ -93,16 +93,34 @@ function computeRainShadow(grid, isWater, elev, sea) {
 }
 
 /**
+ * The seed-only fBm term of the moisture field. Depends on grid + rng only —
+ * never on edits — so buildBase computes it once and every deriveWorld
+ * (brush stroke) reuses it instead of reshuffling a Simplex table + 4-octave
+ * fbm per cell per frame.
+ * @returns {Float32Array} values in [0,1]
+ */
+export function moistureNoiseField(grid, rng) {
+  const noise = new Simplex2(rng);
+  const maxDim = Math.max(grid.pixelWidth, grid.pixelHeight);
+  const field = new Float32Array(grid.n);
+  for (let c = 0; c < grid.n; c++) {
+    const nx = grid.cx[c] / maxDim, ny = grid.cy[c] / maxDim;
+    field[c] = (fbm(noise, nx * 3.0, ny * 3.0, { octaves: 4 }) + 1) / 2;
+  }
+  return field;
+}
+
+/**
  * Moisture in [0,1]: fBm base + bonus near any water body (BFS distance),
  * scaled by the user multiplier. With opts.algo >= 2 the dominant term is
  * orographic rainfall (rain shadow) instead of pure noise.
  * @param {Uint8Array} isWater 1 for ocean/lake cells
- * @param {{algo?: number, elev?: Float32Array, sea?: number}|null} opts
+ * @param {{algo?: number, elev?: Float32Array, sea?: number,
+ *          noiseField?: Float32Array}|null} opts precomputed noise wins over rng
  */
 export function computeMoisture(grid, rng, isWater, multiplier, opts = null) {
   const n = grid.n;
-  const noise = new Simplex2(rng);
-  const maxDim = Math.max(grid.pixelWidth, grid.pixelHeight);
+  const noiseField = opts?.noiseField ?? moistureNoiseField(grid, rng);
   const rain = (opts?.algo ?? 1) >= 2 && opts.elev
     ? computeRainShadow(grid, isWater, opts.elev, opts.sea)
     : null;
@@ -123,8 +141,7 @@ export function computeMoisture(grid, rng, isWater, multiplier, opts = null) {
 
   const moist = new Float32Array(n);
   for (let c = 0; c < n; c++) {
-    const nx = grid.cx[c] / maxDim, ny = grid.cy[c] / maxDim;
-    const base = (fbm(noise, nx * 3.0, ny * 3.0, { octaves: 4 }) + 1) / 2;
+    const base = noiseField[c];
     const waterBonus = Math.max(0, (CAP - dist[c]) / CAP) * 0.35;
     let m;
     if (rain) {

@@ -37,18 +37,13 @@ export async function createSceneFromWorld(world, { sceneName, distance, units }
     flags: {
       hexworld: {
         version: 2,
-        seed: world.params.seed,
         params: world.params,
         edits: encodeEdits(world.edits),
-        editsFormat: "int8x100",
         biomes: encodeOverrides(world.overrides),
-        biomesFormat: "u8",
         rivers: encodeBytes(world.riverEdits),
-        riversFormat: "u8",
         sites: encodeBytes(world.sites ?? null),
         roads: encodeBytes(world.roads ?? null),
         realms: encodeBytes(world.realms ?? null),
-        sitesFormat: "u8",
         names: world.names && Object.keys(world.names).length ? world.names : null,
         labels: world.labelOffsets && Object.keys(world.labelOffsets).length ? world.labelOffsets : null,
         stats: world.stats

@@ -51,6 +51,15 @@ const overlapArea = (a, b) => {
  *   (bx, by) is the base position manual offsets are relative to.
  */
 export function layoutLabels(world, measure = defaultMeasure) {
+  // Cached per repaint so drawLabels and the hit-testing tool share one
+  // computation. Auto-invalidates when the names/offsets objects are
+  // replaced; in-place channel mutations (site painting) are covered by the
+  // attach step nulling world._labelLayout.
+  if (world._labelLayout
+    && world._labelLayoutNames === world.names
+    && world._labelLayoutOffsets === (world.labelOffsets ?? null)) {
+    return world._labelLayout;
+  }
   const names = world.names;
   if (!names) return [];
   const s = world.grid.size;
@@ -140,6 +149,9 @@ export function layoutLabels(world, measure = defaultMeasure) {
     e.y = y;
     placed.push({ x, y, w: e.w, h: e.h });
   }
+  world._labelLayout = entries;
+  world._labelLayoutNames = world.names;
+  world._labelLayoutOffsets = world.labelOffsets ?? null;
   return entries;
 }
 

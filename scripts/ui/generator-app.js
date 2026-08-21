@@ -24,6 +24,7 @@ import {
   encodeBytes, decodeBytes
 } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "./cell-info.js";
+import { worldFlags } from "../lib/flags.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -68,8 +69,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
    * regenerated params + channels back to the scene flags.
    */
   static openForScene(scene) {
-    const flags = scene?.flags?.hexworld;
-    if (!flags?.params || (flags.version ?? 1) < 2) return this.open();
+    const flags = worldFlags(scene);
+    if (!flags) return this.open();
     const app = (this.#instance ??= new this());
     app.#editScene = scene;
     app.#algo = flags.params.algo ?? 1; // never upgrade an existing world's terrain
@@ -385,6 +386,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const maxW = Math.max(300, (box?.clientWidth ?? 640) - 8);
     this.#lastScale = previewScale(this.#world, maxW, 540);
     this.#world.siteRender = siteRenderContext();
+    this.#world._labelLayout = null; // quick paths mutate channels in place
     renderWorld(this.#world, canvas, this.#lastScale, this.#viewMode);
   }
 
@@ -838,7 +840,6 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     target.disabled = true;
     try {
       const update = {
-        "flags.hexworld.seed": this.#world.params.seed,
         "flags.hexworld.params": this.#world.params,
         "flags.hexworld.edits": encodeEdits(this.#edits),
         "flags.hexworld.biomes": encodeOverrides(this.#overrides),
