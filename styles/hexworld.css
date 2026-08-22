@@ -249,6 +249,14 @@
   opacity: 0.55;
 }
 
+.hexworld-app .hw-art-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-12, 12px);
+  white-space: nowrap;
+}
+
 /* Icon picker (module settings menu) */
 .hw-icon-config fieldset {
   margin-bottom: 6px;
@@ -281,6 +289,69 @@
 .hw-icon-config .hw-style-btn.active {
   outline: 2px solid var(--color-shadow-primary, #ff6400);
   border-radius: 4px;
+}
+
+/* Biome artwork picker (module settings menu) */
+.hw-art-config .hw-art-rows {
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hw-art-config .hw-art-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border: 1px solid var(--color-border-light-2, #7a7971);
+  border-radius: 6px;
+}
+
+.hw-art-config .hw-art-thumb {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--swatch, #444);
+}
+
+.hw-art-config .hw-art-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: none;
+}
+
+.hw-art-config .hw-art-name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.hw-art-config .hw-art-file {
+  font-size: var(--font-size-11, 11px);
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hw-art-config .hw-art-row button {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+}
+
+.hw-art-config .hw-save {
+  width: 100%;
+  margin-top: 6px;
 }
 
 .hexworld-app .hw-palette-sep {

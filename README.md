@@ -83,7 +83,7 @@ Foundry VTT **v14** (mínimo v13). Sin dependencias ni build step (ESM puro). El
 
 - [x] Edición manual del terreno (elevar/hundir/suavizar), en la previsualización y en la escena creada.
 - [ ] Pincel de bioma y de agua (overrides por celda, forzar lago/mar).
-- [ ] Relleno por texturas: un asset hexagonal por bioma (atlas configurable por el GM).
+- [x] Relleno por texturas: una imagen por bioma dibujada dentro de cada celda (set por defecto en `assets/biomes/`, configurable por el GM en Ajustes → Arte de biomas, con toggle cliente arte/colores).
 - [ ] «Hornear» a imagen: exportar el estado actual como background estático.
 - [ ] Nombres procedurales (mares, cordilleras, regiones) con etiquetas como Drawings/Notes.
 - [ ] Asentamientos, estados y carreteras.

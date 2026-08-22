@@ -17,6 +17,7 @@ import { generateRealms } from "../generator/realms.js";
 import { generateNames, i18nNamePatterns } from "../generator/names.js";
 import { siteTypeContext } from "../canvas/brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
+import { biomeArtContext, biomeArtEnabled } from "../render/biome-art.js";
 import { labelAt } from "../render/labels.js";
 import { cellIndexAt, describeCell } from "./cell-info.js";
 import { worldFlags } from "../lib/flags.js";
@@ -90,7 +91,12 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   constructor(...args) {
     super(...args);
-    this.#session.overlayExtras = () => ({ siteRender: siteRenderContext() });
+    this.#session.overlayExtras = () => ({
+      siteRender: siteRenderContext(),
+      biomeArt: biomeArtEnabled()
+        ? biomeArtContext(this.#session.world, () => HexWorldGeneratorApp.repaintPreview())
+        : null
+    });
   }
 
   get #world() { return this.#session.world; }
@@ -239,6 +245,14 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         this.#viewMode = viewSel.value;
         this.#drawPreview();
       });
+    }
+
+    // Artwork toggle: writes the client setting, whose onChange repaints the
+    // preview and the scene alike.
+    const artChk = root.querySelector("input[name=showArt]");
+    if (artChk) {
+      artChk.checked = biomeArtEnabled();
+      artChk.addEventListener("change", () => game.settings.set("hexworld", "useBiomeArt", artChk.checked));
     }
 
     const canvas = root.querySelector("canvas.hw-canvas");

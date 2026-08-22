@@ -149,10 +149,49 @@ function cellColorDebug(world, c, mode) {
   return "#000";
 }
 
+/**
+ * Artwork cell: blit the pre-rasterized biome sprite (see biome-art.js), then
+ * overlay the SAME depth/relief cues the flat colors carry — ocean darkens
+ * with depth, land keeps hillshade + altitude lightening + per-cell jitter —
+ * as a translucent black/white fill over the polygon.
+ */
+function drawArtCell(ctx, world, c, spr, shade) {
+  const { grid, elev, sea, isOcean, isWater } = world;
+  ctx.drawImage(spr.canvas, grid.cx[c] + spr.dx, grid.cy[c] + spr.dy);
+  let mult;
+  if (isOcean[c]) {
+    const depth = Math.pow(Math.max(0, Math.min(1, (sea - elev[c]) / (sea * 0.9 || 1))), 0.7);
+    mult = 1 - depth * 0.35;
+  } else if (isWater[c]) {
+    mult = jitter(c);
+  } else {
+    const above = Math.max(0, (elev[c] - sea) / (1 - sea || 1));
+    mult = (0.92 + 0.18 * above) * shade * jitter(c);
+  }
+  if (Math.abs(mult - 1) < 0.02) return;
+  tracePoly(ctx, grid.polys[c]);
+  ctx.fillStyle = mult < 1
+    ? `rgba(0,0,0,${Math.min(0.5, 1 - mult).toFixed(3)})`
+    : `rgba(255,255,255,${Math.min(0.35, (mult - 1) * 0.8).toFixed(3)})`;
+  ctx.fill();
+}
+
+/** Biome id used to pick artwork: water wins over any (latent) land biome. */
+function artBiomeId(world, c) {
+  if (world.isOcean[c]) return B.OCEAN;
+  if (world.isLake[c]) return B.LAKE;
+  return world.biome[c];
+}
+
 function drawCells(ctx, world, mode) {
   const { grid } = world;
   const shade = mode === "terrain" ? computeShade(world) : null;
+  const sprites = mode === "terrain" ? world.biomeArt?.sprites : null;
   for (let c = 0; c < grid.n; c++) {
+    if (sprites) {
+      const spr = sprites.get(artBiomeId(world, c));
+      if (spr) { drawArtCell(ctx, world, c, spr, shade[c]); continue; }
+    }
     const color = mode === "terrain" ? cellColor(world, c, shade[c]) : cellColorDebug(world, c, mode);
     tracePoly(ctx, grid.polys[c]);
     ctx.fillStyle = color;

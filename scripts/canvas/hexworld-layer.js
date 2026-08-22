@@ -14,6 +14,7 @@ import { makeNamer, i18nNamePatterns } from "../generator/names.js";
 import { TerrainMesh } from "./terrain-mesh.js";
 import { BrushHud } from "./brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
+import { biomeArtContext, biomeArtEnabled } from "../render/biome-art.js";
 import { labelAt } from "../render/labels.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
 import { worldFlags } from "../lib/flags.js";
@@ -45,7 +46,12 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     super(...args);
     this.session.overlayExtras = () => ({
       siteRender: siteRenderContext(),
-      showLabels: this.showLabels
+      showLabels: this.showLabels,
+      // Null while disabled or nothing is loaded yet; images that finish
+      // loading later trigger ONE repaint so tiles never stay missing.
+      biomeArt: biomeArtEnabled()
+        ? biomeArtContext(this.session.world, () => this.repaint())
+        : null
     });
   }
 

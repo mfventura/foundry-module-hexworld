@@ -15,6 +15,10 @@
     <input type="checkbox" name="showLabels" {{#if showLabels}}checked{{/if}}>
   </div>
   <div class="hw-hud-row">
+    <label>{{localize "HEXWORLD.ShowArt"}}</label>
+    <input type="checkbox" name="showArt" {{#if showArt}}checked{{/if}}>
+  </div>
+  <div class="hw-hud-row">
     <label>{{localize "HEXWORLD.View"}}</label>
     <select name="viewMode">
       <option value="terrain" {{#if (eq viewMode "terrain")}}selected{{/if}}>{{localize "HEXWORLD.ViewTerrain"}}</option>

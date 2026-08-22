@@ -10,7 +10,9 @@ import { encodeEdits, decodeEdits, encodeOverrides, decodeOverrides } from "./li
 import { renderWorld } from "./render/renderer.js";
 import { HexWorldLayer } from "./canvas/hexworld-layer.js";
 import { DEFAULT_SITE_ICONS, SITE_ICON_SETTINGS } from "./render/site-icons.js";
+import { invalidateBiomeArt } from "./render/biome-art.js";
 import { HexWorldIconConfig } from "./ui/icon-config.js";
+import { HexWorldBiomeArtConfig } from "./ui/biome-art-config.js";
 import { hexToolTab, activateHexTab, HEX_TAB_DEFAULT_TOOL } from "./ui/tool-tabs.js";
 import { worldFlags } from "./lib/flags.js";
 
@@ -54,6 +56,42 @@ Hooks.once("init", () => {
     hint: "HEXWORLD.IconMenuHint",
     icon: "fa-solid fa-icons",
     type: HexWorldIconConfig,
+    restricted: true
+  });
+
+  // Per-biome artwork paths. Hidden raw object (edited through the visual
+  // menu below); world scope so every client renders the same tiles. Only
+  // deviations from the packaged defaults are stored.
+  game.settings.register("hexworld", "biomeArt", {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {},
+    onChange: () => {
+      invalidateBiomeArt();
+      canvas.hexworld?.repaint();
+      HexWorldGeneratorApp.repaintPreview();
+    }
+  });
+  // Client toggle: artwork tiles vs classic flat colors on the terrain view.
+  game.settings.register("hexworld", "useBiomeArt", {
+    name: "HEXWORLD.UseBiomeArt",
+    hint: "HEXWORLD.UseBiomeArtHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => {
+      canvas.hexworld?.repaint();
+      HexWorldGeneratorApp.repaintPreview();
+    }
+  });
+  game.settings.registerMenu("hexworld", "biomeArtMenu", {
+    name: "HEXWORLD.BiomeArtMenuName",
+    label: "HEXWORLD.BiomeArtMenuLabel",
+    hint: "HEXWORLD.BiomeArtMenuHint",
+    icon: "fa-solid fa-image",
+    type: HexWorldBiomeArtConfig,
     restricted: true
   });
 

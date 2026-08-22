@@ -7,6 +7,7 @@
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { SITE } from "../generator/sites.js";
 import { configuredSiteIcons } from "../render/site-icons.js";
+import { biomeArtEnabled } from "../render/biome-art.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
@@ -65,6 +66,7 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       strength: this.layer.brush.strength,
       viewMode: this.layer.viewMode,
       showLabels: this.layer.showLabels,
+      showArt: biomeArtEnabled(),
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
       siteTypes: siteTypeContext(this.layer.brush.site),
@@ -146,6 +148,10 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const labelsChk = this.element.querySelector("input[name=showLabels]");
     labelsChk?.addEventListener("change", () => this.layer.setShowLabels(labelsChk.checked));
+
+    // Client setting: its onChange repaints the scene and the preview.
+    const artChk = this.element.querySelector("input[name=showArt]");
+    artChk?.addEventListener("change", () => game.settings.set("hexworld", "useBiomeArt", artChk.checked));
 
     this.element.querySelector(".hw-sea-btn")?.addEventListener("click", () => this.#openSeaDialog());
 
