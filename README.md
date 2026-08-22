@@ -1,90 +1,95 @@
-# HexWorld – Generador de Mundos para Foundry VTT
+# HexWorld – World Generator for Foundry VTT
 
-Módulo de generación procedural de mundos de fantasía totalmente integrado en Foundry VTT, inspirado en [Azgaar's Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator). Genera mapas con alturas, climas, biomas coherentes, ríos, lagos, mares y montañas, y crea la escena directamente en Foundry con rejilla hexagonal o cuadrada perfectamente alineada.
+**English** · [Español](README.es.md) · [Changelog](CHANGELOG.md)
 
-## Características (v0.1)
+Procedural fantasy world generator fully integrated in Foundry VTT, inspired by [Azgaar's Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator). It generates maps with elevation, coherent climates and biomes, rivers, lakes, seas and mountains, and creates the Scene directly in Foundry with a perfectly aligned hexagonal or square grid.
 
-- **Generación determinista por semilla**: la misma semilla y parámetros producen siempre el mismo mundo. Los parámetros se guardan en las flags de la escena, así que cualquier mapa es regenerable.
-- **Rejilla nativa de Foundry**: la geometría y adyacencia se calculan con las propias clases `foundry.grid.*`, por lo que la imagen encaja píxel a píxel con la rejilla de la escena (hexágonos en filas/columnas, par/impar, o cuadrados).
-- **Pipeline de terreno con sentido**:
-  1. Mapa de alturas por ruido simplex fBm + crestas (ridged) con plantillas: *Continentes, Pangea, Archipiélago, Islas*.
-  2. Nivel del mar por cuantil (el slider de "% de agua" es exacto).
-  3. Temperatura por latitud + enfriamiento por altitud (presets: templado, frío, tropical, planeta completo).
-  4. Humedad por ruido + proximidad al agua.
-  5. Hidrología real: relleno de depresiones (priority-flood), acumulación de flujo, ríos conectados que desembocan en el mar y lagos en cuencas cerradas.
-  6. Biomas tipo Whittaker (temperatura × humedad) con montañas, nieves, glaciares, humedales y playas.
-- **Render cartográfico**: sombreado de relieve (hillshade), gradiente de profundidad oceánica, línea de costa y ríos con grosor según caudal.
-- **Escenas data-driven, sin imagen**: la escena no guarda ningún fichero — solo los datos del mundo (semilla + parámetros + ediciones) en sus flags. Una capa de canvas del módulo regenera el mundo determinísticamente y lo dibuja al abrir la escena.
-- **Edición del terreno en la propia escena**: grupo de controles «Terreno HexWorld» (solo GM) con pinceles de elevar, hundir y suavizar, HUD de radio/fuerza, deshacer por trazo y descartar. Ríos, lagos, costas y biomas se recalculan en vivo mientras pintas, y los cambios se sincronizan a todos los clientes al soltar el trazo. Los mismos pinceles están disponibles en la previsualización antes de crear la escena.
+## Features
 
-## Instalación
+- **Deterministic seeded generation**: the same seed and parameters always produce the same world. Scenes store only the world data (seed + parameters + edits) in their flags — no baked image — and a module canvas layer regenerates and draws the world every time the scene is viewed.
+- **Native Foundry grid**: geometry and adjacency come from Foundry's own `foundry.grid.*` classes, so the map matches the scene grid pixel-perfectly (hex rows/columns, odd/even, or squares).
+- **A terrain pipeline that makes sense**:
+  1. Heightmap from simplex fBm + ridged noise with templates (*Continents, Pangaea, Archipelago, Islands*), domain-warped coastlines and mountain-range polylines.
+  2. Sea level by quantile (the "% water" slider is exact).
+  3. Temperature by latitude + altitude cooling (presets: temperate, cold, tropical, full planet).
+  4. Moisture from noise + water proximity + orographic rain shadow with zonal winds.
+  5. Real hydrology: depression filling (priority-flood), flow accumulation, connected rivers that reach the sea, lakes in closed basins.
+  6. Whittaker-style biomes (temperature × moisture) with mountains, snow, glaciers, wetlands and beaches.
+- **Cartographic render**: hillshade, ocean depth gradient, coastline, rivers with flux-based width — and optional **biome artwork**: an image tile per biome drawn inside every cell (default set included, each biome replaceable with your own art from Settings → Biome artwork, per-client toggle between artwork and flat colors).
+- **In-scene editing (GM)**: raise/lower/smooth brushes plus semantic water/lowland/mountain tools, biome override palette, manual river add/remove, brush radius from 0.1 (single-cell) to 8 cells, per-stroke undo/redo, sea-level re-freeze, false-color debug views (height/temperature/moisture), live cell inspector. Everything re-derives live while painting and syncs to all clients on stroke end. The same tools are available on the generator preview, and existing scenes can be reopened in the generator.
+- **Settlements, POIs and roads**: cities and villages placed by habitability, remote dungeons/temples/ruins, a road network over a terrain cost field, manual two-click route tracing, and configurable map icons (Font Awesome picker, badge or plain marker styles).
+- **Names and labels**: procedural toponyms for settlements, rivers and water bodies, a rename tool, collision-avoiding label layout and a drag-to-pin label tool.
+- **Realms**: points-of-light political territories grown from each city, political map view, realm brush, and found/rename/delete realm management.
 
-En Foundry: **Add-on Modules → Install Module** y pega esta URL de manifiesto:
+## Installation
+
+In Foundry: **Add-on Modules → Install Module** and paste this manifest URL:
 
 ```
 https://github.com/mfventura/foundry-module-hexworld/releases/latest/download/module.json
 ```
 
-Apunta siempre a la última release publicada, así que las actualizaciones llegan por el botón *Update* de Foundry.
+It always points to the latest published release, so updates arrive through Foundry's *Update* button.
 
-### Publicar una nueva versión
+### Publishing a new version
+
+1. Add the release entry to `CHANGELOG.md` (mandatory) and review both READMEs (update if the change is user-facing).
+2. Bump `version` (and the `download` URL) in `module.json`.
+3. Tag and push:
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.11.2 && git push origin main v0.11.2
 ```
 
-El workflow de GitHub Actions inyecta la versión del tag en `module.json`, empaqueta `module.zip` y publica la release con ambos ficheros adjuntos.
+The GitHub Actions workflow injects the tag version into `module.json`, packages `module.zip` and publishes the release with both files attached.
 
-## Instalación (desarrollo)
+## Installation (development)
 
-1. Enlaza o copia esta carpeta en el directorio de módulos de Foundry con el nombre `hexworld`:
+1. Link or copy this folder into Foundry's modules directory as `hexworld`:
    ```bash
-   ln -s /Users/manuel.fernandezventura/hexworld "<FoundryData>/Data/modules/hexworld"
+   ln -s /path/to/hexworld "<FoundryData>/Data/modules/hexworld"
    ```
-2. Activa **HexWorld – Generador de Mundos** en el mundo.
-3. Como GM, abre la pestaña **Escenas** y pulsa **Generar Mundo** (botón al pie del panel).
+2. Enable **HexWorld – Generador de Mundos** in the world.
+3. As GM, open the **Scenes** tab and press **Generate World** (button at the bottom of the panel).
 
-También disponible por API/macro: `game.modules.get("hexworld").api.open()`.
+Also available via API/macro: `game.modules.get("hexworld").api.open()`.
 
-## Uso
+## Usage
 
-1. Elige plantilla, tipo de rejilla, tamaño (columnas × filas, máx. 25.000 celdas) y parámetros de clima.
-2. **Generar previsualización** — itera con distintas semillas (el dado genera una nueva).
-3. **Crear escena** — renderiza a resolución completa y crea la escena.
+1. Pick a template, grid type, size (columns × rows, max 25,000 cells) and climate parameters.
+2. **Generate preview** — iterate with different seeds (the die rolls a new one).
+3. Optionally edit the preview with the toolbar (terrain, biomes, rivers, sites, roads, realms, labels).
+4. **Create scene** — the scene stores the world data and renders itself on view.
 
-## Estructura
+## Structure
 
 ```
 scripts/
-  main.js                    # hooks, capa, scene controls, botón del sidebar, API
-  lib/random.js              # PRNG con semilla (xmur3 + mulberry32)
-  lib/noise.js               # simplex 2D, fBm, ridged
-  lib/codec.js               # codificación de ediciones (Int8+base64) para flags
-  generator/grid.js          # WorldGrid: geometría/adyacencia vía foundry.grid.*
-  generator/heightmap.js     # alturas + plantillas + nivel del mar
-  generator/climate.js       # temperatura y humedad
-  generator/hydrology.js     # océanos/mares interiores, lagos, flujo, ríos
-  generator/biomes.js        # tabla de biomas y colores
-  generator/brush.js         # pincel de terreno compartido (preview y escena)
-  generator/worldgen.js      # orquestador: buildBase + deriveWorld
-  render/renderer.js         # render 2D a canvas (preview y textura de escena)
-  canvas/hexworld-layer.js   # capa de interacción: edición en escena y sync
-  canvas/terrain-mesh.js     # PrimarySpriteMesh con la textura del terreno
-  canvas/brush-hud.js        # HUD flotante de radio/fuerza
-  scene/scene-builder.js     # creación de la Escena (solo datos, sin imagen)
-  ui/generator-app.js        # ventana ApplicationV2 del generador
+  main.js                    # hooks, layer, scene controls, sidebar button, settings, API
+  lib/                       # seeded PRNG, simplex noise, flags codec, MinHeap, flags gate
+  generator/                 # grid, heightmap+templates, climate, hydrology, biomes,
+                             # brush, sites+roads, realms, names, worldgen orchestrator
+  edit/edit-session.js       # shared editing engine (channels, tools, undo/redo, flags)
+  render/renderer.js         # 2D canvas render (preview and scene texture)
+  render/biome-art.js        # per-biome artwork tiles (default set + overrides + sprites)
+  render/site-icons.js       # Font Awesome icon catalog and runtime glyph resolution
+  render/labels.js           # collision-avoiding label layout
+  canvas/                    # interaction layer, terrain mesh, brush HUD
+  scene/scene-builder.js     # Scene creation (data only, no image)
+  ui/                        # generator window, icon picker, biome-art picker, inspector
+assets/biomes/               # default biome artwork tiles (17 PNG)
 ```
 
-## Compatibilidad
+## Compatibility
 
-Foundry VTT **v14** (mínimo v13). Sin dependencias ni build step (ESM puro). El módulo usa los namespaces modernos (`foundry.applications.ux/apps`, `foundry.grid.*`, ApplicationV2) y tolera el eje de elevación (`k`) que V14 introduce con Scene Levels.
+Foundry VTT **v14** (minimum v13). No dependencies, no build step (pure ESM). The module uses the modern namespaces (`foundry.applications.ux/apps`, `foundry.grid.*`, ApplicationV2) and tolerates the elevation axis (`k`) that v14 introduces with Scene Levels.
 
-## Hoja de ruta
+## Roadmap
 
-- [x] Edición manual del terreno (elevar/hundir/suavizar), en la previsualización y en la escena creada.
-- [ ] Pincel de bioma y de agua (overrides por celda, forzar lago/mar).
-- [x] Relleno por texturas: una imagen por bioma dibujada dentro de cada celda (set por defecto en `assets/biomes/`, configurable por el GM en Ajustes → Arte de biomas, con toggle cliente arte/colores).
-- [ ] «Hornear» a imagen: exportar el estado actual como background estático.
-- [ ] Nombres procedurales (mares, cordilleras, regiones) con etiquetas como Drawings/Notes.
-- [ ] Asentamientos, estados y carreteras.
-- [ ] Capas: precipitación, temperatura, altura (modo de vista de depuración).
+- [x] Manual terrain editing (raise/lower/smooth), on the preview and the created scene.
+- [x] Biome and water brushes (per-cell overrides, force lake/sea).
+- [x] Texture fill: an image per biome drawn inside every cell (default set in `assets/biomes/`, GM-configurable, per-client artwork/colors toggle).
+- [x] Procedural names with labels (settlements included).
+- [x] Settlements, realms and roads.
+- [x] Debug view layers: height, temperature, moisture.
+- [ ] "Bake" to image: export the current state as a static background.

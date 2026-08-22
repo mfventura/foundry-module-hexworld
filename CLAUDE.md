@@ -2,6 +2,12 @@
 
 Módulo de Foundry VTT (**objetivo: v14**, mínimo v13) de generación procedural de mundos, estilo Azgaar pero integrado: genera terreno por celdas alineadas a la rejilla y crea Escenas directamente.
 
+## Proceso de release (obligatorio en cada versión)
+
+1. **CHANGELOG.md (inglés, obligatorio)**: toda release añade su entrada ANTES de etiquetar — formato Keep a Changelog, versiones descendentes, fecha real.
+2. **README bilingüe (revisión obligatoria, actualización opcional)**: `README.md` (inglés) y `README.es.md` (español) se mantienen sincronizados; si el cambio es de cara al usuario, actualizar ambos.
+3. Bump de `version` + URL `download` en module.json, commit, tag `v*` y push (dispara el workflow de release). El zip empaqueta `module.json scripts styles templates lang assets README.md README.es.md CHANGELOG.md` — si aparece una carpeta nueva, añadirla en release.yml.
+
 ## Principios de diseño (no romper)
 
 - **JavaScript ESM puro, sin build step.** Foundry carga `scripts/main.js` vía `esmodules`. No introducir bundlers ni TypeScript sin decisión explícita.

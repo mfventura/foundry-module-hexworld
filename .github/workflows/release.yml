@@ -36,7 +36,7 @@ jobs:
           jq -r '"version=\(.version)\ndownload=\(.download)"' module.json
 
       - name: Build module archive
-        run: zip -r module.zip module.json scripts styles templates lang assets README.md
+        run: zip -r module.zip module.json scripts styles templates lang assets README.md README.es.md CHANGELOG.md
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
