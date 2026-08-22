@@ -70,4 +70,24 @@ assert(nameKeyAt(world, sites, plain) === `k${realms[plain]}`, "nameKeyAt on rea
 const again = generateRealms(generateWorld(params), sites, 0.5);
 assert(again.every((v, i) => v === realms[i]), "realm generation deterministic");
 
+// --- Maritime claims (v0.12.2): painted water counts as territory.
+// Claim some border-ocean cells for realm 1 (as the brush now allows).
+const oceanCells = [];
+for (let c = 0; c < world.grid.n && oceanCells.length < 12; c++) {
+  if (world.isOcean[c] && world.grid.isBorder(c) && !realms[c]) oceanCells.push(c);
+}
+assert(oceanCells.length > 0, "found open-ocean cells to claim");
+for (const c of oceanCells) realms[c] = 1;
+assert(nameKeyAt(world, sites, oceanCells[0]) === "k1", "nameKeyAt on claimed open ocean resolves to the realm");
+let unclaimedOcean = -1;
+for (let c = 0; c < world.grid.n; c++) {
+  if (world.isOcean[c] && world.grid.isBorder(c) && !realms[c]) { unclaimedOcean = c; break; }
+}
+assert(nameKeyAt(world, sites, unclaimedOcean) === null, "unclaimed open ocean still resolves to nothing");
+const anchorsWet = computeLabelAnchors(world, sites);
+const r1 = anchorsWet.realms.find(r => r.id === 1);
+const r1Before = anchors.realms.find(r => r.id === 1);
+assert(r1 && r1.size === r1Before.size + oceanCells.length, "realm anchors count claimed water as territory");
+for (const c of oceanCells) realms[c] = 0; // restore
+
 console.log(process.exitCode ? "SMOKE FAILED" : "SMOKE PASSED");

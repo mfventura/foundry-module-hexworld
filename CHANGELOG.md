@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release MUST add an entry here before tagging.
 
+## [0.12.2] - 2026-08-22
+
+### Fixed
+- **Discontinuous realm borders on hex grids**: the edge-to-neighbor matching relied on an exact geometric tie that floating point sporadically broke, so individual hexagon sides that should carry a frontier stroke were misclassified as map-border edges and skipped. The comparison now carries a tolerance (shared with the coastline renderer, which had the same latent bug).
+- **Realm territory over water**: the realm brush refused to paint sea, ocean and lake cells, so coastal and maritime zones could not be delimited. Water is now claimable: claimed water gets the realm tint and dashed frontier on the terrain view and a water-blended realm color on the political view; the cell inspector and the rename tool recognize claimed waters (including open ocean), realm label anchors weigh maritime territory, and journal pages count it in the realm's extent. Unclaimed water next to a land realm keeps relying on the coastline, exactly as before, and procedural realm growth remains land-only — claiming water is a manual act.
+
 ## [0.12.1] - 2026-08-22
 
 ### Added

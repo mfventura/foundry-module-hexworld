@@ -64,16 +64,19 @@ assert(s.routeAnchor === land2, "anchor chains to the destination");
 const roadEnd = s.endStroke();
 assert(roadEnd.channel === "road" && roadEnd.needsDerive === false, "road stroke is overlay-only");
 
-// --- Realm brush skips water while painting, allows erasing.
+// --- Realm brush claims water too (v0.12.2: maritime territory).
 s.brush.realm = 1;
 let wet = -1;
 for (let c = 0; c < grid.n; c++) if (s.world.isWater[c]) { wet = c; break; }
 s.beginStroke("realm");
 s.paint("realm", ...at(wet));
-assert(!s.realms || s.realms[wet] === 0, "realm paint skipped water");
+assert(s.realms?.[wet] === 1, "realm paint claims water");
 s.paint("realm", ...at(land));
 assert(s.realms[land] === 1, "realm paint claimed land");
 s.endStroke();
+s.undo();
+assert(s.realms[wet] === 0 && s.realms[land] === 0, "realm stroke over water undoes");
+s.redo();
 
 // --- Realm lifecycle: alloc skips used ids; delete clears history + offsets.
 s.setName("k1", "Reino de Prueba");

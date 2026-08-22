@@ -20,7 +20,7 @@ Módulo de generación procedural de mundos de fantasía totalmente integrado en
 - **Asentamientos, PDI y caminos**: ciudades y pueblos colocados por habitabilidad, mazmorras/templos/ruinas remotos, red de carreteras sobre un campo de coste del terreno, trazado manual de rutas con dos clicks e iconos de mapa configurables (selector Font Awesome, estilo insignia o icono suelto).
 - **Marcadores libres**: coloca un marcador con su propio icono (la guarida, el portal, el vado…) en cualquier celda desde la paleta de sitios; cada marcador elige su icono del catálogo y se nombra a mano.
 - **Nombres y etiquetas**: topónimos procedurales para asentamientos, ríos y masas de agua, herramienta de renombrar, layout de etiquetas anti-colisión y herramienta de arrastrar etiquetas.
-- **Reinos**: territorios políticos points-of-light crecidos desde cada ciudad, vista política, pincel de reino y gestión de fundar/renombrar/eliminar reinos.
+- **Reinos**: territorios políticos points-of-light crecidos desde cada ciudad, vista política, pincel de reino (tierra y agua — las aguas costeras y los mares se pueden reclamar a mano) y gestión de fundar/renombrar/eliminar reinos.
 - **Publicar al diario**: un click crea un JournalEntry de la escena con una página por elemento nombrado (asentamientos, PDI, marcadores, reinos, ríos, lagos, mares) y notas de mapa clicables sobre los sitios. Cada página nueva llega con una ficha de datos (bioma, clima, reino, desembocadura, capital…) y unos párrafos de lore procedural localizado con enlaces a las páginas relacionadas — sembrado por elemento, estable entre sincronizaciones. Re-sincronizar solo añade lo que falta y sigue los renombres — el contenido que escribas en las páginas nunca se pisa.
 
 ## Instalación

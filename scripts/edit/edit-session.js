@@ -269,10 +269,10 @@ export class WorldEditSession {
 
     if (tool === "realm") {
       this.realms ??= new Uint8Array(grid.n);
+      // v0.12.2: water is claimable too — coastal waters and seas can be
+      // delimited by hand (generation still grows realms over land only).
       const t = applyBiomeBrush(this.base, this.realms, cells, {
-        biome: this.brush.realm, radius: this.brush.radius, x, y,
-        // Realms are a land-only channel; the wilderness eraser may clean water.
-        skip: this.brush.realm > 0 ? (c => !!this.world?.isWater[c]) : null
+        biome: this.brush.realm, radius: this.brush.radius, x, y
       });
       return { changed: t > 0, needsDerive: false };
     }

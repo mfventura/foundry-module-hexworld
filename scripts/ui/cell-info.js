@@ -43,11 +43,12 @@ export function describeCell(world, c) {
       `${L("InfoMoist")} ${Math.round(world.moist[c] * 100)}%`
     );
     if (world.isRiver[c]) parts.push(L("InfoRiver"));
-    const realm = world.realms?.[c];
-    if (realm) {
-      const realmName = world.names?.[`k${realm}`];
-      if (realmName) parts.push(realmName);
-    }
+  }
+  // Realm membership shows on land AND on claimed waters (v0.12.2).
+  const realm = world.realms?.[c];
+  if (realm) {
+    const realmName = world.names?.[`k${realm}`];
+    if (realmName) parts.push(realmName);
   }
   return parts.join(" · ");
 }

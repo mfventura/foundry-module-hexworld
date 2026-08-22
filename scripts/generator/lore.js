@@ -192,16 +192,16 @@ function realmFacts(world, f) {
   const neighborIds = new Set();
   for (let c = 0; c < grid.n; c++) {
     if (realms?.[c] !== id) continue;
-    if (isWater[c]) continue;
-    cells++;
-    biomeCount.set(world.biome[c], (biomeCount.get(world.biome[c]) ?? 0) + 1);
-    const t = sites?.[c];
-    if (t === SITE.CITY || t === SITE.VILLAGE) settlements++;
-    if (t === SITE.CITY && capital < 0) capital = c;
+    cells++; // claimed water counts as territory (v0.12.2)
     for (const nb of grid.neighbors[c]) {
       const other = realms[nb];
       if (other && other !== id) neighborIds.add(other);
     }
+    if (isWater[c]) continue; // biome character and settlements are land facts
+    biomeCount.set(world.biome[c], (biomeCount.get(world.biome[c]) ?? 0) + 1);
+    const t = sites?.[c];
+    if (t === SITE.CITY || t === SITE.VILLAGE) settlements++;
+    if (t === SITE.CITY && capital < 0) capital = c;
   }
   let biomeKey = null, best = -1;
   for (const [b, n] of biomeCount) {

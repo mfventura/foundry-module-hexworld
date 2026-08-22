@@ -103,10 +103,12 @@ export function computeLabelAnchors(world, sites) {
 
   const realms = world.realms ?? null;
   if (realms) {
+    // Claimed water counts as territory (v0.12.2): a realm's centroid/anchor
+    // considers every claimed cell, so maritime claims pull the label.
     const acc = new Map(); // id -> {sx, sy, count}
     for (let c = 0; c < grid.n; c++) {
       const id = realms[c];
-      if (!id || isWater[c]) continue;
+      if (!id) continue;
       const a = acc.get(id) ?? { sx: 0, sy: 0, count: 0 };
       a.sx += grid.cx[c];
       a.sy += grid.cy[c];
@@ -118,7 +120,7 @@ export function computeLabelAnchors(world, sites) {
       const cx = a.sx / a.count, cy = a.sy / a.count;
       let anchor = -1, bd = Infinity;
       for (let c = 0; c < grid.n; c++) {
-        if (realms[c] !== id || isWater[c]) continue;
+        if (realms[c] !== id) continue;
         const dx = grid.cx[c] - cx, dy = grid.cy[c] - cy;
         const d = dx * dx + dy * dy;
         if (d < bd) { bd = d; anchor = c; }
@@ -250,7 +252,9 @@ export function nameKeyAt(world, sites, c) {
     const body = [c];
     let minC = c;
     for (let q = 0; q < body.length; q++) {
-      if (grid.isBorder(body[q])) return null; // open ocean is not named
+      // Open ocean is not named — but a maritime claim still answers with
+      // its realm, so inspect/rename work over claimed waters.
+      if (grid.isBorder(body[q])) return world.realms?.[c] ? `k${world.realms[c]}` : null;
       for (const nb of grid.neighbors[body[q]]) {
         if (!seen.has(nb) && isWater[nb]) {
           seen.add(nb);

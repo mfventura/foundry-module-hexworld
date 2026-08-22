@@ -125,12 +125,18 @@ const MOIST_RAMP = [
 function cellColorDebug(world, c, mode) {
   const { elev, sea, temp, moist, isWater } = world;
   if (mode === "realms") {
+    const id = world.realms?.[c] ?? 0;
     if (world.isOcean?.[c]) {
       const depth = Math.pow(Math.max(0, Math.min(1, (sea - elev[c]) / (sea * 0.9 || 1))), 0.7);
-      return css(lerpRgb(SHALLOW_OCEAN, DEEP_OCEAN, depth), 0.85);
+      const water = lerpRgb(SHALLOW_OCEAN, DEEP_OCEAN, depth);
+      // Claimed water: the realm color shows through the water tone.
+      if (id) return css(lerpRgb(realmRgb(id), water, 0.55), 0.9);
+      return css(water, 0.85);
     }
-    if (isWater[c]) return css([93, 143, 191]);
-    const id = world.realms?.[c] ?? 0;
+    if (isWater[c]) {
+      if (id) return css(lerpRgb(realmRgb(id), [93, 143, 191], 0.55), 0.9);
+      return css([93, 143, 191]);
+    }
     const base = id ? realmRgb(id) : WILDERNESS_RGB;
     const above = Math.max(0, (elev[c] - sea) / (1 - sea || 1));
     return css(base, 0.9 + 0.25 * above);
@@ -225,9 +231,23 @@ function drawRivers(ctx, world) {
 }
 
 /**
+ * Squared-distance slack for matching a polygon edge to the neighbor across
+ * it: the shared edge lies ON the bisector, so the midpoint is equidistant
+ * from both centers — exactly on square grids, but only within float error on
+ * hex grids (Foundry's vertices/centers). A strict comparison sporadically
+ * misclassifies real shared edges as map-border edges and drops border/coast
+ * segments. The slack is far below the gap to any non-adjacent center.
+ */
+function edgeTieEps(grid) {
+  return grid.size * grid.size * 1e-3;
+}
+
+/**
  * Realm overlay: a soft per-cell tint (terrain view only) plus border strokes
- * along polygon edges where the realm changes on land — coastlines already
- * separate realms from the water.
+ * along polygon edges where the realm changes. Water is claimable (v0.12.2):
+ * claimed water is tinted and bordered like land — only the edge between a
+ * claim and UNCLAIMED cells across the coastline stays unstroked, because the
+ * coastline already separates them.
  */
 function drawRealms(ctx, world, mode) {
   const realms = world.realms;
@@ -237,7 +257,7 @@ function drawRealms(ctx, world, mode) {
   if (mode === "terrain") {
     for (let c = 0; c < grid.n; c++) {
       const id = realms[c];
-      if (!id || isWater[c]) continue;
+      if (!id) continue;
       const [r, g, b] = realmRgb(id);
       tracePoly(ctx, grid.polys[c]);
       ctx.fillStyle = `rgba(${r},${g},${b},0.12)`;
@@ -245,15 +265,16 @@ function drawRealms(ctx, world, mode) {
     }
   }
 
+  const eps = edgeTieEps(grid);
   ctx.lineWidth = grid.size * 0.06;
   ctx.lineCap = "round";
   ctx.setLineDash([grid.size * 0.22, grid.size * 0.14]);
   for (let c = 0; c < grid.n; c++) {
-    if (isWater[c]) continue;
     const id = realms[c];
+    if (!id) continue; // every border edge draws from its higher (claimed) id side
     const flat = grid.polys[c];
     const m = flat.length;
-    const [r, g, b] = id ? realmRgb(id) : WILDERNESS_RGB;
+    const [r, g, b] = realmRgb(id);
     ctx.strokeStyle = `rgba(${Math.round(r * 0.6)},${Math.round(g * 0.6)},${Math.round(b * 0.6)},0.7)`;
     ctx.beginPath();
     let any = false;
@@ -267,12 +288,15 @@ function drawRealms(ctx, world, mode) {
         const d = dx * dx + dy * dy;
         if (d < bestD) { bestD = d; best = nb; }
       }
-      // Ties (exact on square grids) mean a real shared edge — see drawCoast.
       const dxc = grid.cx[c] - mx, dyc = grid.cy[c] - my;
-      if (best < 0 || bestD > dxc * dxc + dyc * dyc) continue; // map border edge
-      if (isWater[best] || realms[best] === id) continue;
+      if (best < 0 || bestD > dxc * dxc + dyc * dyc + eps) continue; // map border edge
+      const other = realms[best] ?? 0;
+      if (other === id) continue;
       // Draw each border edge once, from the higher realm id side.
-      if (id < (realms[best] ?? 0)) continue;
+      if (id < other) continue;
+      // Land claim against unclaimed water (or the reverse): the coastline
+      // already draws that separation.
+      if (!other && isWater[best] !== isWater[c]) continue;
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       any = true;
@@ -410,6 +434,7 @@ function drawLabels(ctx, world) {
  */
 function drawCoast(ctx, world) {
   const { grid, isWater } = world;
+  const eps = edgeTieEps(grid);
   ctx.strokeStyle = COAST_COLOR;
   ctx.lineWidth = grid.size * 0.045;
   ctx.lineCap = "round";
@@ -433,9 +458,9 @@ function drawCoast(ctx, world) {
       }
       // Also compare against the cell itself: border edges have no neighbor
       // across. The shared edge lies ON the bisector, so the distances TIE
-      // (exactly, on square grids) — the comparison must accept equality.
+      // (exactly on square grids, within float error on hex — see edgeTieEps).
       const dxc = grid.cx[c] - mx, dyc = grid.cy[c] - my;
-      if (best >= 0 && bestD <= dxc * dxc + dyc * dyc && isWater[best]) {
+      if (best >= 0 && bestD <= dxc * dxc + dyc * dyc + eps && isWater[best]) {
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
       }
