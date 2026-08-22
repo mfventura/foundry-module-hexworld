@@ -12,7 +12,7 @@
  * nearest road. The same cost field powers the manual two-click route tool.
  */
 
-export const SITE = { NONE: 0, VILLAGE: 1, CITY: 2, DUNGEON: 3, TEMPLE: 4, RUIN: 5 };
+export const SITE = { NONE: 0, VILLAGE: 1, CITY: 2, DUNGEON: 3, TEMPLE: 4, RUIN: 5, MARKER: 6 };
 export const ROAD = { NONE: 0, PATH: 1, ROAD: 2 };
 
 import { B } from "./biomes.js";

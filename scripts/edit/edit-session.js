@@ -40,7 +40,7 @@ const CHANNEL_FIELDS = {
   elev: ["edits", "stats"],
   biome: ["biomes", "stats"],
   river: ["rivers", "stats"],
-  site: ["sites"],
+  site: ["sites", "markers"],
   road: ["roads"],
   realm: ["realms"],
   labels: ["labels"]
@@ -67,8 +67,19 @@ export class WorldEditSession {
   /** @type {Uint8Array|null} */ realms = null;
   /** @type {Record<string, string>} */ names = {};
   /** @type {Record<string, [number, number]>} */ labelOffsets = {};
+  /**
+   * Icon per free-marker cell (`{cell: faIconName}`). Only read where
+   * sites[cell] === SITE.MARKER; entries under other site values stay latent
+   * (same policy as submerged biome overrides), so per-stroke undo of the u8
+   * channel needs no second history.
+   * @type {Record<string, string>}
+   */
+  markers = {};
 
-  brush = { radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE, realm: 1 };
+  brush = {
+    radius: 3, strength: 0.06, biome: B.GRASSLAND, site: SITE.VILLAGE, realm: 1,
+    markerIcon: "fa-location-dot"
+  };
 
   /** First endpoint of a pending two-click road route. */
   routeAnchor = -1;
@@ -100,6 +111,7 @@ export class WorldEditSession {
     this.sites = decodeBytes(flags.sites ?? null, n);
     this.roads = decodeBytes(flags.roads ?? null, n);
     this.realms = decodeBytes(flags.realms ?? null, n);
+    this.markers = { ...(flags.markers ?? {}) };
     this.names = { ...(flags.names ?? {}) };
     this.labelOffsets = { ...(flags.labels ?? {}) };
     this.clearHistory();
@@ -113,6 +125,7 @@ export class WorldEditSession {
     if (!keepChannels) {
       this.edits = this.overrides = this.riverEdits = null;
       this.sites = this.roads = this.realms = null;
+      this.markers = {};
       this.names = {};
       this.labelOffsets = {};
     }
@@ -136,6 +149,7 @@ export class WorldEditSession {
     w.sites = this.sites;
     w.roads = this.roads;
     w.realms = this.realms;
+    w.markers = this.markers;
     w.names = this.names;
     w.labelOffsets = this.labelOffsets;
     w._labelLayout = null; // in-place channel edits may have moved anything
@@ -147,6 +161,7 @@ export class WorldEditSession {
     this.base = this.world = null;
     this.edits = this.overrides = this.riverEdits = null;
     this.sites = this.roads = this.realms = null;
+    this.markers = {};
     this.names = {};
     this.labelOffsets = {};
     this.routeAnchor = -1;
@@ -220,6 +235,12 @@ export class WorldEditSession {
       this.sites ??= new Uint8Array(grid.n);
       if (cells && !cells.has(c)) cells.set(c, this.sites[c]);
       this.sites[c] = this.brush.site;
+      if (this.brush.site === SITE.MARKER) {
+        this.markers = { ...this.markers, [c]: this.brush.markerIcon };
+        // A fresh free marker is worthless without a name: hosts open the
+        // rename dialog for it (the placement itself still commits/persists).
+        return { changed: true, needsDerive: false, status: "rename", key: `s${c}` };
+      }
       return { changed: true, needsDerive: false };
     }
 
@@ -404,6 +425,7 @@ export class WorldEditSession {
   reset() {
     this.edits = this.overrides = this.riverEdits = null;
     this.sites = this.roads = this.realms = null;
+    this.markers = {};
     this.names = {};
     this.labelOffsets = {};
     this.clearHistory();
@@ -425,6 +447,10 @@ export class WorldEditSession {
     if (want("biomes")) update["flags.hexworld.biomes"] = encodeOverrides(this.overrides);
     if (want("rivers")) update["flags.hexworld.rivers"] = encodeBytes(this.riverEdits);
     if (want("sites")) update["flags.hexworld.sites"] = encodeBytes(this.sites);
+    if (want("markers")) {
+      if (Object.keys(this.markers).length) update["flags.hexworld.markers"] = this.markers;
+      else update["flags.hexworld.-=markers"] = null;
+    }
     if (want("roads")) update["flags.hexworld.roads"] = encodeBytes(this.roads);
     if (want("realms")) update["flags.hexworld.realms"] = encodeBytes(this.realms);
     if (want("stats") && this.world) update["flags.hexworld.stats"] = this.world.stats;

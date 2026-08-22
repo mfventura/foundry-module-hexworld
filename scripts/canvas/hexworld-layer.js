@@ -17,6 +17,7 @@ import { siteRenderContext } from "../render/site-icons.js";
 import { biomeArtContext, biomeArtEnabled } from "../render/biome-art.js";
 import { labelAt } from "../render/labels.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
+import { renameJournalFeature } from "../integration/journal-sync.js";
 import { worldFlags } from "../lib/flags.js";
 
 export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
@@ -364,6 +365,10 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.repaint();
     this.#hud?.render();
     await canvas.scene?.update(update, { hexworldLocal: true });
+    // Renames follow through to an already-published journal page (no-op when
+    // the scene has no journal or the feature has no page yet).
+    renameJournalFeature(canvas.scene, key, value).catch(err =>
+      console.error("HexWorld | Journal rename failed", err));
     return true;
   }
 

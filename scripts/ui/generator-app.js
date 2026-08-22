@@ -12,10 +12,10 @@ import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { renderWorld, previewScale } from "../render/renderer.js";
 import { createSceneFromWorld } from "../scene/scene-builder.js";
 import { randomSeedString, makeRng } from "../lib/random.js";
-import { generateSettlements } from "../generator/sites.js";
+import { generateSettlements, SITE } from "../generator/sites.js";
 import { generateRealms } from "../generator/realms.js";
 import { generateNames, i18nNamePatterns } from "../generator/names.js";
-import { siteTypeContext } from "../canvas/brush-hud.js";
+import { siteTypeContext, markerIconOptions } from "../canvas/brush-hud.js";
 import { siteRenderContext } from "../render/site-icons.js";
 import { biomeArtContext, biomeArtEnabled } from "../render/biome-art.js";
 import { labelAt } from "../render/labels.js";
@@ -166,7 +166,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
     return {
       p, gridTypes, templates, climates, biomeSwatches,
-      siteTypes: siteTypeContext(this.#session.brush.site),
+      siteTypes: siteTypeContext(this.#session.brush.site, this.#session.brush.markerIcon),
+      markerIcons: markerIconOptions(this.#session.brush.markerIcon),
       editSceneName: this.#editScene?.name ?? null
     };
   }
@@ -226,6 +227,15 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
         this.#refreshToolButtons();
       });
     }
+
+    // Free-marker icon: picking one is an intent to place markers.
+    const markerSel = root.querySelector("select[name=markerIcon]");
+    markerSel?.addEventListener("change", () => {
+      this.#session.brush.markerIcon = markerSel.value;
+      this.#session.brush.site = SITE.MARKER;
+      this.#tool = "site";
+      this.render(); // refresh the marker swatch icon + active states
+    });
 
     // Brush sliders: restore from state and track changes (a re-render must
     // not silently reset them).
@@ -448,7 +458,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const palette = this.element.querySelector(".hw-palette-bar");
     if (palette) {
       palette.classList.toggle("disabled", !ready);
-      for (const el of palette.querySelectorAll("button")) el.disabled = !ready;
+      for (const el of palette.querySelectorAll("button, select")) el.disabled = !ready;
     }
     const undoBtn = bar.querySelector("button[data-action=undoEdit]");
     if (undoBtn) undoBtn.disabled = !ready || !this.#session.hasUndo;
@@ -601,6 +611,7 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     const { sites, roads } = generateSettlements(s.world, makeRng(params.seed + ":sites"), params.settlements ?? 0.5);
     s.sites = sites;
     s.roads = roads;
+    s.markers = {}; // the sites channel was replaced: manual markers went with it
     s.attach();
     s.realms = generateRealms(s.world, sites, params.realms ?? 0.5);
     s.attach();
@@ -673,8 +684,12 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
       // separate clear-then-write pair could lose every name if the second
       // write failed.
       const sceneFlags = this.#editScene.flags?.hexworld ?? {};
-      for (const field of ["names", "labels"]) {
-        const next = field === "names" ? this.#session.names : this.#session.labelOffsets;
+      const objectChannels = {
+        names: this.#session.names,
+        labels: this.#session.labelOffsets,
+        markers: this.#session.markers
+      };
+      for (const [field, next] of Object.entries(objectChannels)) {
         for (const k of Object.keys(sceneFlags[field] ?? {})) {
           if (!(k in next)) update[`flags.hexworld.${field}.-=${k}`] = null;
         }

@@ -36,7 +36,10 @@ export const DEFAULT_SITE_ICONS = {
   [SITE.CITY]: "fa-city",
   [SITE.DUNGEON]: "fa-dungeon",
   [SITE.TEMPLE]: "fa-place-of-worship",
-  [SITE.RUIN]: "fa-archway"
+  [SITE.RUIN]: "fa-archway",
+  // Free markers carry their own icon per cell (world.markers); this is only
+  // the fallback for entries whose stored icon is missing or unknown.
+  [SITE.MARKER]: "fa-location-dot"
 };
 
 /** Module setting key per site type. */
@@ -54,7 +57,8 @@ export const SITE_STYLE = {
   [SITE.CITY]: { badge: "#f0cf6d", ring: "#2b2118", glyph: "#2b2118", scale: 1.15 },
   [SITE.DUNGEON]: { badge: "#33303b", ring: "#d9d4c8", glyph: "#e8e4da", scale: 1 },
   [SITE.TEMPLE]: { badge: "#efe9dc", ring: "#2b2118", glyph: "#4a3826", scale: 1 },
-  [SITE.RUIN]: { badge: "#cfc7b6", ring: "#4a4438", glyph: "#4a4438", scale: 0.95 }
+  [SITE.RUIN]: { badge: "#cfc7b6", ring: "#4a4438", glyph: "#4a4438", scale: 0.95 },
+  [SITE.MARKER]: { badge: "#dfe4e8", ring: "#22303c", glyph: "#22303c", scale: 0.95 }
 };
 
 /** Resolve the configured icon name per site type from the module settings. */
@@ -140,5 +144,6 @@ export function siteRenderContext() {
   } catch (_err) { /* setting not registered yet */ }
   // Nudge the face into the font cache so 2D canvas can rasterize it.
   try { document.fonts?.load(`${weight} 24px ${family.split(",")[0]}`, Object.values(glyphs).join("")); } catch (_err) { /* ok */ }
-  return { glyphs, fontFamily: family, fontWeight: weight, markerStyle };
+  // glyphFor: per-cell icons (free markers) resolved through the same cache.
+  return { glyphs, fontFamily: family, fontWeight: weight, markerStyle, glyphFor: glyphChar };
 }

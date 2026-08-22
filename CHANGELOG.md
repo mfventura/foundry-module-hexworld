@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release MUST add an entry here before tagging.
 
+## [0.12.0] - 2026-08-22
+
+### Added
+- **Publish to journal**: a new scene-control button creates (and keeps in sync) a JournalEntry for the scene with one page per named feature — settlements, POIs, free markers, realms, rivers, lakes and seas — plus clickable map Notes over every named site. Syncing is idempotent (tracked by flags, never by name), only creates what is missing, and renames pages when a feature was renamed; the page body always belongs to the GM and is never touched. The rename tool also updates the matching journal page on the spot.
+- **Free markers**: a new entry in the sites palette places a marker with a per-marker icon (chosen from the existing icon catalog via a new dropdown in the scene HUD and the generator palette) on any cell — lairs, portals, fords, anything the world did not generate. Placing one immediately opens the rename dialog; markers are never auto-named. Stored in a new optional `flags.hexworld.markers` channel; old scenes are unaffected.
+- New roadmap document (`ROADMAP.md`) describing the planned v0.12–v0.16 feature arc.
+
+### Notes
+- "Regenerate settlements" replaces the sites channel, so manually placed markers are replaced with it (same policy as manually placed settlements).
+
 ## [0.11.4] - 2026-08-22
 
 ### Changed

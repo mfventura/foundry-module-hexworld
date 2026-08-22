@@ -213,6 +213,11 @@
       <button type="button" class="hw-swatch hw-site-swatch{{#if active}} active{{/if}}" data-site="{{id}}"
               data-tooltip="{{label}}" disabled><i class="{{icon}}"></i></button>
       {{/each}}
+      <select name="markerIcon" data-tooltip="{{localize 'HEXWORLD.MarkerIcon'}}" disabled>
+        {{#each markerIcons}}
+        <option value="{{name}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+        {{/each}}
+      </select>
     </div>
     <div class="hw-canvas-wrap">
       <canvas class="hw-canvas" width="640" height="480"></canvas>

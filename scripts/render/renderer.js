@@ -5,6 +5,7 @@
  */
 
 import { B, BIOME_COLORS } from "../generator/biomes.js";
+import { SITE } from "../generator/sites.js";
 import { SITE_GLYPHS, SITE_STYLE, DEFAULT_SITE_ICONS } from "./site-icons.js";
 import { layoutLabels } from "./labels.js";
 
@@ -331,7 +332,16 @@ function drawSites(ctx, world) {
     const t = sites[c];
     if (!t) continue;
     const style = SITE_STYLE[t];
-    const glyph = rc?.glyphs?.[t] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]]?.glyph;
+    let glyph;
+    if (t === SITE.MARKER) {
+      // Free markers carry their own icon name per cell.
+      const name = world.markers?.[c] ?? DEFAULT_SITE_ICONS[SITE.MARKER];
+      glyph = rc?.glyphFor?.(name)
+        || SITE_GLYPHS[name]?.glyph
+        || SITE_GLYPHS[DEFAULT_SITE_ICONS[SITE.MARKER]]?.glyph;
+    } else {
+      glyph = rc?.glyphs?.[t] ?? SITE_GLYPHS[DEFAULT_SITE_ICONS[t]]?.glyph;
+    }
     if (!style || !glyph) continue;
     const x = grid.cx[c], y = grid.cy[c];
     if (plain) {

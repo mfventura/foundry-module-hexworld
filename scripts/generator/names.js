@@ -206,7 +206,10 @@ export function generateNames(world, sites, existing, rng, patterns = null) {
   const namer = makeNamer(rng, used);
   const anchors = computeLabelAnchors(world, sites);
   for (const s of anchors.sites) {
-    if (!names[s.key]) names[s.key] = P[SITE_KIND[s.type]](namer());
+    // Free markers (and any future manual-only type) have no pattern: the GM
+    // names them by hand, so the generator must leave them unnamed.
+    const kind = SITE_KIND[s.type];
+    if (kind && !names[s.key]) names[s.key] = P[kind](namer());
   }
   for (const r of anchors.rivers) {
     if (!names[r.key]) names[r.key] = P.river(namer());

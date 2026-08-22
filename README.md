@@ -18,8 +18,10 @@ Procedural fantasy world generator fully integrated in Foundry VTT, inspired by 
 - **Cartographic render**: hillshade, ocean depth gradient, coastline, rivers with flux-based width — and optional **biome artwork**: an image tile per biome drawn inside every cell (default set included, each biome replaceable with your own art from Settings → Biome artwork, per-client toggle between artwork and flat colors).
 - **In-scene editing (GM)**: raise/lower/smooth brushes plus semantic water/lowland/mountain tools, biome override palette, manual river add/remove, brush radius from 0.1 (single-cell) to 8 cells, per-stroke undo/redo, sea-level re-freeze, false-color debug views (height/temperature/moisture), live cell inspector. Everything re-derives live while painting and syncs to all clients on stroke end. The same tools are available on the generator preview, and existing scenes can be reopened in the generator.
 - **Settlements, POIs and roads**: cities and villages placed by habitability, remote dungeons/temples/ruins, a road network over a terrain cost field, manual two-click route tracing, and configurable map icons (Font Awesome picker, badge or plain marker styles).
+- **Free markers**: place a marker with its own icon (lair, portal, ford…) on any cell from the sites palette; each marker picks its icon from the catalog and is named by hand.
 - **Names and labels**: procedural toponyms for settlements, rivers and water bodies, a rename tool, collision-avoiding label layout and a drag-to-pin label tool.
 - **Realms**: points-of-light political territories grown from each city, political map view, realm brush, and found/rename/delete realm management.
+- **Journal publishing**: one click creates a JournalEntry for the scene with a page per named feature (settlements, POIs, markers, realms, rivers, lakes, seas) and clickable map Notes over the sites. Re-syncing only adds what is missing and follows renames — your page content is never overwritten.
 
 ## Installation
 

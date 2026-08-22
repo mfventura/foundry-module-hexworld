@@ -14,6 +14,7 @@ import { invalidateBiomeArt } from "./render/biome-art.js";
 import { HexWorldIconConfig } from "./ui/icon-config.js";
 import { HexWorldBiomeArtConfig } from "./ui/biome-art-config.js";
 import { hexToolTab, activateHexTab, HEX_TAB_DEFAULT_TOOL } from "./ui/tool-tabs.js";
+import { syncSceneJournal } from "./integration/journal-sync.js";
 import { worldFlags } from "./lib/flags.js";
 
 Hooks.once("init", () => {
@@ -172,6 +173,20 @@ Hooks.on("getSceneControlButtons", controls => {
       realm: { name: "realm", order: 15, title: "HEXWORLD.ToolRealm", icon: "fa-solid fa-flag", visible: tab === "sites" },
       labelMove: { name: "labelMove", order: 16, title: "HEXWORLD.ToolLabelMove", icon: "fa-solid fa-arrows-up-down-left-right", visible: tab === "sites" },
       // --- Always available ---
+      journal: {
+        name: "journal", order: 89, title: "HEXWORLD.SyncJournal", icon: "fa-solid fa-book-open",
+        button: true, onChange: async () => {
+          const world = canvas.hexworld?.world;
+          if (!world) return;
+          try {
+            const res = await syncSceneJournal(canvas.scene, world);
+            if (res) ui.notifications.info(game.i18n.format("HEXWORLD.JournalSynced", res));
+          } catch (err) {
+            console.error("HexWorld | Journal sync failed", err);
+            ui.notifications.error(game.i18n.localize("HEXWORLD.ErrGenerate"));
+          }
+        }
+      },
       hud: {
         name: "hud", order: 90, title: "HEXWORLD.ToggleHud", icon: "fa-solid fa-toolbox",
         button: true, onChange: () => canvas.hexworld?.toggleHud()

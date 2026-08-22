@@ -6,7 +6,7 @@
 
 import { PAINTABLE_BIOMES, BIOME_COLORS } from "../generator/biomes.js";
 import { SITE } from "../generator/sites.js";
-import { configuredSiteIcons } from "../render/site-icons.js";
+import { configuredSiteIcons, DEFAULT_SITE_ICONS, SITE_GLYPHS } from "../render/site-icons.js";
 import { biomeArtEnabled } from "../render/biome-art.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
@@ -19,17 +19,32 @@ export const SITE_TYPES = [
   { id: SITE.DUNGEON, key: "SiteDungeon" },
   { id: SITE.TEMPLE, key: "SiteTemple" },
   { id: SITE.RUIN, key: "SiteRuin" },
+  { id: SITE.MARKER, key: "SiteMarker" },
   { id: SITE.NONE, key: "SiteErase", icon: "fa-solid fa-eraser" }
 ];
 
-/** Palette entries with the CONFIGURED icon per type (matches the map). */
-export function siteTypeContext(activeId) {
+/**
+ * Palette entries with the CONFIGURED icon per type (matches the map). The
+ * free-marker swatch shows the icon currently selected for the next marker.
+ */
+export function siteTypeContext(activeId, markerIcon = null) {
   const icons = configuredSiteIcons();
   return SITE_TYPES.map(t => ({
     ...t,
-    icon: t.icon ?? `fa-solid ${icons[t.id]}`,
+    icon: t.icon ?? `fa-solid ${t.id === SITE.MARKER
+      ? (SITE_GLYPHS[markerIcon] ? markerIcon : DEFAULT_SITE_ICONS[SITE.MARKER])
+      : icons[t.id]}`,
     label: game.i18n.localize(`HEXWORLD.${t.key}`),
     active: t.id === activeId
+  }));
+}
+
+/** Options for the free-marker icon dropdown (the shared curated catalog). */
+export function markerIconOptions(selected) {
+  return Object.entries(SITE_GLYPHS).map(([name, g]) => ({
+    name,
+    label: game.i18n.localize(g.label),
+    selected: name === selected
   }));
 }
 
@@ -69,7 +84,8 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       showArt: biomeArtEnabled(),
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
-      siteTypes: siteTypeContext(this.layer.brush.site),
+      siteTypes: siteTypeContext(this.layer.brush.site, this.layer.brush.markerIcon),
+      markerIcons: markerIconOptions(this.layer.brush.markerIcon),
       realmSwatches: this.#realmSwatches()
     };
   }
@@ -128,6 +144,15 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
         activateHexTab("sites", "site");
       });
     }
+
+    // Free-marker icon: picking one is an intent to place markers.
+    const markerSel = this.element.querySelector("select[name=markerIcon]");
+    markerSel?.addEventListener("change", () => {
+      this.layer.brush.markerIcon = markerSel.value;
+      this.layer.brush.site = SITE.MARKER;
+      activateHexTab("sites", "site");
+      this.render(); // refresh the marker swatch icon + active states
+    });
 
     for (const btn of this.element.querySelectorAll(".hw-realm-swatch")) {
       btn.addEventListener("click", () => {

@@ -44,6 +44,14 @@
             data-tooltip="{{label}}"><i class="{{icon}}"></i></button>
     {{/each}}
   </div>
+  <div class="hw-hud-row">
+    <label>{{localize "HEXWORLD.MarkerIcon"}}</label>
+    <select name="markerIcon">
+      {{#each markerIcons}}
+      <option value="{{name}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </div>
   <div class="hw-hud-subtitle">{{localize "HEXWORLD.RealmsTitle"}}</div>
   <div class="hw-palette">
     {{#each realmSwatches}}
