@@ -122,7 +122,33 @@
 
   <section class="hw-preview">
     <div class="hw-editbar disabled">
-      <span class="hw-editbar-label">{{localize "HEXWORLD.EditTools"}}</span>
+      <div class="hw-editbar-row">
+        <span class="hw-editbar-label">{{localize "HEXWORLD.EditTools"}}</span>
+        <label>{{localize "HEXWORLD.BrushRadius"}}</label>
+        <input type="range" name="brushRadius" min="1" max="8" step="1" value="3" disabled>
+        <label>{{localize "HEXWORLD.BrushStrength"}}</label>
+        <input type="range" name="brushStrength" min="0.02" max="0.15" step="0.01" value="0.06" disabled>
+        <button type="button" data-action="undoEdit" data-tooltip="{{localize 'HEXWORLD.Undo'}}" disabled>
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+        <button type="button" data-action="redoEdit" data-tooltip="{{localize 'HEXWORLD.Redo'}}" disabled>
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+        <button type="button" data-action="resetEdits" data-tooltip="{{localize 'HEXWORLD.ResetEdits'}}" disabled>
+          <i class="fa-solid fa-eraser"></i>
+        </button>
+        <select name="viewMode" data-tooltip="{{localize 'HEXWORLD.View'}}">
+          <option value="terrain">{{localize "HEXWORLD.ViewTerrain"}}</option>
+          <option value="height">{{localize "HEXWORLD.ViewHeight"}}</option>
+          <option value="temp">{{localize "HEXWORLD.ViewTemp"}}</option>
+          <option value="moist">{{localize "HEXWORLD.ViewMoist"}}</option>
+          <option value="realms">{{localize "HEXWORLD.ViewRealms"}}</option>
+        </select>
+        <label class="hw-art-toggle" data-tooltip="{{localize 'HEXWORLD.UseBiomeArt'}}">
+          <input type="checkbox" name="showArt"> {{localize "HEXWORLD.ShowArt"}}
+        </label>
+      </div>
+      <div class="hw-editbar-row">
       <button type="button" data-tool="raise" data-tooltip="{{localize 'HEXWORLD.ToolRaise'}}" disabled>
         <i class="fa-solid fa-arrow-up-from-ground-water"></i>
       </button>
@@ -150,6 +176,7 @@
       <button type="button" data-tool="riverRemove" data-tooltip="{{localize 'HEXWORLD.ToolRiverRemove'}}" disabled>
         <i class="fa-solid fa-droplet-slash"></i>
       </button>
+      <span class="hw-palette-sep"></span>
       <button type="button" data-tool="site" data-tooltip="{{localize 'HEXWORLD.ToolSite'}}" disabled>
         <i class="fa-solid fa-location-dot"></i>
       </button>
@@ -168,32 +195,11 @@
       <button type="button" data-tool="roadErase" data-tooltip="{{localize 'HEXWORLD.ToolRoadErase'}}" disabled>
         <i class="fa-solid fa-road-circle-xmark"></i>
       </button>
+      <span class="hw-palette-sep"></span>
       <button type="button" data-action="regenSites" data-tooltip="{{localize 'HEXWORLD.RegenSettlements'}}" disabled>
         <i class="fa-solid fa-arrows-rotate"></i>
       </button>
-      <label>{{localize "HEXWORLD.BrushRadius"}}</label>
-      <input type="range" name="brushRadius" min="1" max="8" step="1" value="3" disabled>
-      <label>{{localize "HEXWORLD.BrushStrength"}}</label>
-      <input type="range" name="brushStrength" min="0.02" max="0.15" step="0.01" value="0.06" disabled>
-      <button type="button" data-action="undoEdit" data-tooltip="{{localize 'HEXWORLD.Undo'}}" disabled>
-        <i class="fa-solid fa-rotate-left"></i>
-      </button>
-      <button type="button" data-action="redoEdit" data-tooltip="{{localize 'HEXWORLD.Redo'}}" disabled>
-        <i class="fa-solid fa-rotate-right"></i>
-      </button>
-      <button type="button" data-action="resetEdits" data-tooltip="{{localize 'HEXWORLD.ResetEdits'}}" disabled>
-        <i class="fa-solid fa-eraser"></i>
-      </button>
-      <select name="viewMode" data-tooltip="{{localize 'HEXWORLD.View'}}">
-        <option value="terrain">{{localize "HEXWORLD.ViewTerrain"}}</option>
-        <option value="height">{{localize "HEXWORLD.ViewHeight"}}</option>
-        <option value="temp">{{localize "HEXWORLD.ViewTemp"}}</option>
-        <option value="moist">{{localize "HEXWORLD.ViewMoist"}}</option>
-        <option value="realms">{{localize "HEXWORLD.ViewRealms"}}</option>
-      </select>
-      <label class="hw-art-toggle" data-tooltip="{{localize 'HEXWORLD.UseBiomeArt'}}">
-        <input type="checkbox" name="showArt"> {{localize "HEXWORLD.ShowArt"}}
-      </label>
+      </div>
     </div>
     <div class="hw-palette hw-palette-bar">
       {{#each biomeSwatches}}
