@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release MUST add an entry here before tagging.
 
+## [0.11.4] - 2026-08-22
+
+### Changed
+- GitHub releases now use the version's CHANGELOG.md entry as their description instead of auto-generated commit notes, so each release page shows the same informative text as the changelog.
+
 ## [0.11.3] - 2026-08-22
 
 ### Added

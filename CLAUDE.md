@@ -4,7 +4,7 @@ Módulo de Foundry VTT (**objetivo: v14**, mínimo v13) de generación procedura
 
 ## Proceso de release (obligatorio en cada versión)
 
-1. **CHANGELOG.md (inglés, obligatorio)**: toda release añade su entrada ANTES de etiquetar — formato Keep a Changelog, versiones descendentes, fecha real.
+1. **CHANGELOG.md (inglés, obligatorio)**: toda release añade su entrada ANTES de etiquetar — formato Keep a Changelog, versiones descendentes, fecha real. El workflow extrae esa entrada (`## [X.Y.Z]` hasta el siguiente encabezado) como descripción de la GitHub release, así que sin entrada la release sale con un cuerpo genérico.
 2. **README bilingüe (revisión obligatoria, actualización opcional)**: `README.md` (inglés) y `README.es.md` (español) se mantienen sincronizados; si el cambio es de cara al usuario, actualizar ambos.
 3. Bump de `version` + URL `download` en module.json, commit, tag `v*` y push (dispara el workflow de release). El zip empaqueta `module.json scripts styles templates lang assets README.md README.es.md CHANGELOG.md` — si aparece una carpeta nueva, añadirla en release.yml.
 
