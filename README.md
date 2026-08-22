@@ -21,7 +21,7 @@ Procedural fantasy world generator fully integrated in Foundry VTT, inspired by 
 - **Free markers**: place a marker with its own icon (lair, portal, ford…) on any cell from the sites palette; each marker picks its icon from the catalog and is named by hand.
 - **Names and labels**: procedural toponyms for settlements, rivers and water bodies, a rename tool, collision-avoiding label layout and a drag-to-pin label tool.
 - **Realms**: points-of-light political territories grown from each city, political map view, realm brush, and found/rename/delete realm management.
-- **Journal publishing**: one click creates a JournalEntry for the scene with a page per named feature (settlements, POIs, markers, realms, rivers, lakes, seas) and clickable map Notes over the sites. Re-syncing only adds what is missing and follows renames — your page content is never overwritten.
+- **Journal publishing**: one click creates a JournalEntry for the scene with a page per named feature (settlements, POIs, markers, realms, rivers, lakes, seas) and clickable map Notes over the sites. Each new page opens with a data sheet (biome, climate, realm, river mouth, capital…) and a few paragraphs of procedurally generated, localized lore with links to related pages — seeded per feature, so it is stable across re-syncs. Re-syncing only adds what is missing and follows renames — your page content is never overwritten.
 
 ## Installation
 

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release MUST add an entry here before tagging.
 
+## [0.12.1] - 2026-08-22
+
+### Added
+- **Procedural lore on journal pages**: pages created by "Publish to journal" now open with a compact data sheet (type, biome, climate, realm, nearest settlement for POIs, river length and mouth, water extent, realm capital and territory) followed by 2–4 paragraphs of procedurally composed descriptive text — geography, political context and an adventure hook. Related features are cross-linked with `@UUID` references (a realm links to its capital, a river to the towns on its banks, a settlement to its realm and river…).
+- Lore is fully localizable: every sentence lives whole in the language files (English and Spanish shipped) so grammar and gender stay correct, and the variant choices are seeded per feature — re-syncing, other clients and other languages all tell the same story.
+
+### Notes
+- Bodies are still written only when a page is CREATED (your edits are never overwritten), so pages published with v0.12.0 keep their original short body; delete a page and re-sync to regenerate it. The text is baked in the GM's active language at sync time.
+
 ## [0.12.0] - 2026-08-22
 
 ### Added

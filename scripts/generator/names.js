@@ -80,7 +80,7 @@ const SITE_KIND = {
 };
 
 /** Mouth cell of the river system containing `c` (the anchor identity). */
-function riverMouth(world, c) {
+export function riverMouth(world, c) {
   const { isRiver, isWater, flowTo, grid } = world;
   let cur = c, guard = 0;
   while (guard++ < grid.n) {

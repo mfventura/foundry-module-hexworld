@@ -9,13 +9,20 @@
  * feature was renamed — the page BODY belongs to the GM and is never touched.
  * Notes show their page's name, so renames propagate to the map for free.
  *
+ * v0.12.1: new pages get a data table plus procedurally composed prose
+ * (generator/lore.js — seeded per feature, localized via lang templates) with
+ * @UUID cross-links to sibling pages. Bodies are written ONLY at creation, so
+ * pages are created first (empty) and filled in a second pass once every
+ * page id is known for linking.
+ *
  * collectJournalFeatures() is pure (Node smoke-testable); everything else
  * talks to Foundry documents and is browser-only.
  */
 
 import { computeLabelAnchors } from "../generator/names.js";
 import { SITE } from "../generator/sites.js";
-import { describeCell } from "../ui/cell-info.js";
+import { featureFacts, composeLore } from "../generator/lore.js";
+import { makeRng } from "../lib/random.js";
 
 /** i18n label key per site type (page subtitle). */
 const SITE_LABELS = {
@@ -32,6 +39,7 @@ const KIND_LABELS = {
   lake: "JournalKindLake",
   river: "JournalKindRiver"
 };
+const POI_TYPES = [SITE.DUNGEON, SITE.TEMPLE, SITE.RUIN, SITE.MARKER];
 
 /**
  * Every NAMED feature of the world, in cartographic page order (realms,
@@ -70,24 +78,48 @@ function kindLabel(f) {
   return game.i18n.localize(`HEXWORLD.${key}`);
 }
 
-/** Initial page body: type + a one-line cell summary. The GM owns it after. */
-function pageContent(world, f) {
+/**
+ * Initial page body: a compact data table plus the procedural prose, with
+ * @UUID links to any sibling page. Written once at creation — the GM owns
+ * the body after.
+ * @param {Map<string, JournalEntryPage>} pages every page of the entry by feature key
+ */
+function pageContent(world, f, pages) {
   const esc = foundry.utils.escapeHTML;
-  let body = `<p><em>${esc(kindLabel(f))}</em></p>`;
-  if (f.kind === "realm") {
-    const id = Number(f.key.slice(1));
-    let cells = 0, settlements = 0;
-    for (let c = 0; c < world.grid.n; c++) {
-      if (world.realms?.[c] !== id) continue;
-      cells++;
-      const t = world.sites?.[c];
-      if (t === SITE.CITY || t === SITE.VILLAGE) settlements++;
+  const facts = featureFacts(world, f);
+  const t = (key, data) => {
+    if (!data) return game.i18n.localize(`HEXWORLD.${key}`);
+    const safe = {};
+    for (const [k, v] of Object.entries(data)) safe[k] = typeof v === "string" && !v.includes("@UUID[") ? esc(v) : v;
+    return game.i18n.format(`HEXWORLD.${key}`, safe);
+  };
+  const link = (key, name) => {
+    const page = pages.get(key);
+    return page ? `@UUID[${page.uuid}]{${esc(name)}}` : esc(name);
+  };
+
+  const rows = [[t("JournalFieldType"), esc(kindLabel(f))]];
+  if (f.kind === "site") {
+    if (facts.biomeKey) rows.push([t("JournalFieldBiome"), esc(t(`Biome${facts.biomeKey}`))]);
+    rows.push([t("JournalFieldClimate"), `${facts.temp} °C`]);
+    rows.push([t("JournalFieldRealm"), facts.realmName ? link(facts.realmKey, facts.realmName) : t("JournalWilderness")]);
+    if (POI_TYPES.includes(f.siteType)) {
+      rows.push([t("JournalFieldNearest"), facts.nearest ? link(facts.nearest.key, facts.nearest.name) : "—"]);
     }
-    body += `<p>${esc(game.i18n.format("HEXWORLD.JournalRealmSummary", { cells, settlements }))}</p>`;
-  } else {
-    body += `<p>${esc(describeCell(world, f.cell))}</p>`;
+  } else if (f.kind === "river") {
+    rows.push([t("JournalFieldLength"), t("JournalCells", { n: facts.length })]);
+    rows.push([t("JournalFieldMouth"), facts.mouthName ? link(facts.mouthKey, facts.mouthName) : t("JournalOpenSea")]);
+  } else if (f.kind === "sea" || f.kind === "lake") {
+    rows.push([t("JournalFieldExtent"), t("JournalCells", { n: facts.size })]);
+  } else if (f.kind === "realm") {
+    rows.push([t("JournalFieldCapital"), facts.capitalName ? link(facts.capitalKey, facts.capitalName) : "—"]);
+    rows.push([t("JournalFieldTerritory"), t("JournalRealmSummary", { cells: facts.cells, settlements: facts.settlements })]);
   }
-  return body;
+  const table = `<table><tbody>${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</tbody></table>`;
+
+  const rng = makeRng(`${world.params.seed}:lore:${f.key}`);
+  const prose = composeLore(facts, rng, t, link).map(s => `<p>${s}</p>`).join("");
+  return table + prose;
 }
 
 /** The scene's journal entry, tracked by flag (created on demand). */
@@ -128,18 +160,34 @@ export async function syncSceneJournal(scene, world) {
         name: f.name,
         type: "text",
         sort: (i + 1) * 100000,
-        text: { content: pageContent(world, f), format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
         flags: { hexworld: { key: f.key } }
       });
     } else if (page.name !== f.name) {
       renames.push({ _id: page.id, name: f.name });
     }
   });
+  const createdKeys = new Set(creates.map(c => c.flags.hexworld.key));
   if (creates.length) await entry.createEmbeddedDocuments("JournalEntryPage", creates);
   if (renames.length) await entry.updateEmbeddedDocuments("JournalEntryPage", renames);
 
-  // Map notes: settlements/POIs/markers only (features with a marker cell).
+  // Second pass: generate the bodies of the JUST-CREATED pages, now that
+  // every page exists and cross-links can resolve. Existing bodies are the
+  // GM's and are never rewritten.
   const pages = pageByKey();
+  const bodies = [];
+  for (const f of features) {
+    if (!createdKeys.has(f.key)) continue;
+    const page = pages.get(f.key);
+    if (!page) continue;
+    bodies.push({
+      _id: page.id,
+      "text.content": pageContent(world, f, pages),
+      "text.format": CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
+    });
+  }
+  if (bodies.length) await entry.updateEmbeddedDocuments("JournalEntryPage", bodies);
+
+  // Map notes: settlements/POIs/markers only (features with a marker cell).
   const noted = new Set();
   for (const n of scene.notes) {
     const k = n.flags?.hexworld?.key;
