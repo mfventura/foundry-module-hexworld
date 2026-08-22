@@ -30,6 +30,8 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   viewMode = "terrain";
   /** Client-local label visibility (HUD toggle). */
   showLabels = true;
+  /** Client-local overlay visibility (HUD switches; hides, never deletes). */
+  show = { realms: true, sites: true, roads: true, rivers: true };
 
   #mesh = null;
   #hud = null;
@@ -48,6 +50,7 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
     this.session.overlayExtras = () => ({
       siteRender: siteRenderContext(),
       showLabels: this.showLabels,
+      show: { ...this.show },
       // Null while disabled or nothing is loaded yet; images that finish
       // loading later trigger ONE repaint so tiles never stay missing.
       biomeArt: biomeArtEnabled()
@@ -328,6 +331,14 @@ export class HexWorldLayer extends foundry.canvas.layers.InteractionLayer {
   /** HUD toggle: show or hide the name labels (client-local). */
   setShowLabels(show) {
     this.showLabels = !!show;
+    this.repaint();
+  }
+
+  /** HUD switches: show/hide one overlay channel (client-local, data kept). */
+  setShow(key, on) {
+    if (key === "labels") return this.setShowLabels(on);
+    if (!(key in this.show)) return;
+    this.show[key] = !!on;
     this.repaint();
   }
 

@@ -11,12 +11,16 @@
     <output></output>
   </div>
   <div class="hw-hud-row">
-    <label>{{localize "HEXWORLD.ShowLabels"}}</label>
-    <input type="checkbox" name="showLabels" {{#if showLabels}}checked{{/if}}>
-  </div>
-  <div class="hw-hud-row">
     <label>{{localize "HEXWORLD.ShowArt"}}</label>
     <input type="checkbox" name="showArt" {{#if showArt}}checked{{/if}}>
+  </div>
+  <div class="hw-hud-subtitle">{{localize "HEXWORLD.Layers"}}</div>
+  <div class="hw-layer-toggles">
+    {{#each layerToggles}}
+    <label class="hw-layer-toggle">
+      <input type="checkbox" name="layerToggle" data-layer="{{key}}" {{#if on}}checked{{/if}}> {{label}}
+    </label>
+    {{/each}}
   </div>
   <div class="hw-hud-row">
     <label>{{localize "HEXWORLD.View"}}</label>

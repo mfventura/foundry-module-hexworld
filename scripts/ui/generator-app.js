@@ -81,6 +81,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
 
   #tool = "raise";
   #viewMode = "terrain";
+  /** Client-local overlay visibility (toolbar switches; hides, never deletes). */
+  #show = { labels: true, realms: true, sites: true, roads: true, rivers: true };
   #painting = false;
   #lastDerive = 0;
   /** @type {Scene|null} scene being edited in place (openForScene) */
@@ -93,6 +95,8 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     super(...args);
     this.#session.overlayExtras = () => ({
       siteRender: siteRenderContext(),
+      showLabels: this.#show.labels,
+      show: { ...this.#show },
       biomeArt: biomeArtEnabled()
         ? biomeArtContext(this.#session.world, () => HexWorldGeneratorApp.repaintPreview())
         : null
@@ -263,6 +267,16 @@ export class HexWorldGeneratorApp extends HandlebarsApplicationMixin(Application
     if (artChk) {
       artChk.checked = biomeArtEnabled();
       artChk.addEventListener("change", () => game.settings.set("hexworld", "useBiomeArt", artChk.checked));
+    }
+
+    // Layer visibility switches: hide/show overlay channels, never the data.
+    for (const chk of root.querySelectorAll("input[name=layerToggle]")) {
+      chk.checked = this.#show[chk.dataset.layer] !== false;
+      chk.addEventListener("change", () => {
+        this.#show[chk.dataset.layer] = chk.checked;
+        this.#session.attach(); // refresh world.show/showLabels
+        this.#drawPreview();
+      });
     }
 
     const canvas = root.querySelector("canvas.hw-canvas");

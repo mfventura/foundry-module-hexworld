@@ -147,6 +147,13 @@
         <label class="hw-art-toggle" data-tooltip="{{localize 'HEXWORLD.UseBiomeArt'}}">
           <input type="checkbox" name="showArt"> {{localize "HEXWORLD.ShowArt"}}
         </label>
+        <span class="hw-palette-sep"></span>
+        <span class="hw-editbar-label">{{localize "HEXWORLD.Layers"}}</span>
+        <label class="hw-art-toggle"><input type="checkbox" name="layerToggle" data-layer="labels" checked> {{localize "HEXWORLD.ShowLabels"}}</label>
+        <label class="hw-art-toggle"><input type="checkbox" name="layerToggle" data-layer="realms" checked> {{localize "HEXWORLD.LayerRealms"}}</label>
+        <label class="hw-art-toggle"><input type="checkbox" name="layerToggle" data-layer="sites" checked> {{localize "HEXWORLD.LayerSites"}}</label>
+        <label class="hw-art-toggle"><input type="checkbox" name="layerToggle" data-layer="roads" checked> {{localize "HEXWORLD.LayerRoads"}}</label>
+        <label class="hw-art-toggle"><input type="checkbox" name="layerToggle" data-layer="rivers" checked> {{localize "HEXWORLD.LayerRivers"}}</label>
       </div>
       <div class="hw-editbar-row">
       <button type="button" data-tool="raise" data-tooltip="{{localize 'HEXWORLD.ToolRaise'}}" disabled>

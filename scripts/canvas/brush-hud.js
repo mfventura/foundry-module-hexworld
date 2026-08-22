@@ -11,7 +11,7 @@ import { biomeArtEnabled } from "../render/biome-art.js";
 import { NO_OVERRIDE } from "../lib/codec.js";
 import { cellIndexAt, describeCell } from "../ui/cell-info.js";
 import { activateHexTab } from "../ui/tool-tabs.js";
-import { REALM_COLORS } from "../render/renderer.js";
+import { REALM_COLORS, OVERLAY_LAYERS } from "../render/renderer.js";
 
 export const SITE_TYPES = [
   { id: SITE.VILLAGE, key: "SiteVillage" },
@@ -80,7 +80,11 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
       radius: this.layer.brush.radius,
       strength: this.layer.brush.strength,
       viewMode: this.layer.viewMode,
-      showLabels: this.layer.showLabels,
+      layerToggles: OVERLAY_LAYERS.map(l => ({
+        key: l.key,
+        label: game.i18n.localize(`HEXWORLD.${l.label}`),
+        on: l.key === "labels" ? this.layer.showLabels : this.layer.show[l.key] !== false
+      })),
       showArt: biomeArtEnabled(),
       swatches,
       eraserActive: this.layer.brush.biome === NO_OVERRIDE,
@@ -171,8 +175,10 @@ export class BrushHud extends HandlebarsApplicationMixin(ApplicationV2) {
     const viewSel = this.element.querySelector("select[name=viewMode]");
     viewSel?.addEventListener("change", () => this.layer.setViewMode(viewSel.value));
 
-    const labelsChk = this.element.querySelector("input[name=showLabels]");
-    labelsChk?.addEventListener("change", () => this.layer.setShowLabels(labelsChk.checked));
+    // Layer visibility switches: hide/show overlay channels, never the data.
+    for (const chk of this.element.querySelectorAll("input[name=layerToggle]")) {
+      chk.addEventListener("change", () => this.layer.setShow(chk.dataset.layer, chk.checked));
+    }
 
     // Client setting: its onChange repaints the scene and the preview.
     const artChk = this.element.querySelector("input[name=showArt]");

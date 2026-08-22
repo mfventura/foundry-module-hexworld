@@ -243,6 +243,25 @@
   opacity: 0.85;
 }
 
+#hexworld-brush-hud .hw-layer-toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  margin-top: 4px;
+}
+
+#hexworld-brush-hud .hw-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+#hexworld-brush-hud .hw-layer-toggle input[type=checkbox] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
 #hexworld-brush-hud .hw-palette,
 .hexworld-app .hw-palette {
   display: flex;

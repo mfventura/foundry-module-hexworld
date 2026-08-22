@@ -470,6 +470,20 @@ function drawCoast(ctx, world) {
 }
 
 /**
+ * Overlay channels the hosts can toggle client-locally (v0.12.3): key in
+ * `world.show` + i18n label for the visibility switches. Labels have their
+ * own longstanding flag (`world.showLabels`) and are listed here only so the
+ * UIs render one homogeneous switch group. Hiding never touches data.
+ */
+export const OVERLAY_LAYERS = [
+  { key: "labels", label: "ShowLabels" },
+  { key: "realms", label: "LayerRealms" },
+  { key: "sites", label: "LayerSites" },
+  { key: "roads", label: "LayerRoads" },
+  { key: "rivers", label: "LayerRivers" }
+];
+
+/**
  * Render the world into a canvas at the given scale.
  * @param {string} mode "terrain" (default), the political view "realms", or
  *   a false-color debug view: "height" | "temp" | "moist". Debug views keep
@@ -486,13 +500,16 @@ export function renderWorld(world, canvas, scale = 1, mode = "terrain") {
   ctx.fillRect(0, 0, g.pixelWidth, g.pixelHeight);
   drawCells(ctx, world, mode);
   const overlays = mode === "terrain" || mode === "height" || mode === "realms";
-  if (mode === "terrain" || mode === "realms") drawRealms(ctx, world, mode);
-  if (overlays) drawRivers(ctx, world);
+  // Visibility switches (world.show, absent = everything on). The political
+  // view always draws realms — they are the point of that view.
+  const show = world.show ?? {};
+  if (mode === "realms" || (mode === "terrain" && show.realms !== false)) drawRealms(ctx, world, mode);
+  if (overlays && show.rivers !== false) drawRivers(ctx, world);
   drawCoast(ctx, world);
   if (overlays) {
-    drawRoads(ctx, world);
-    drawSites(ctx, world);
-    drawLabels(ctx, world);
+    if (show.roads !== false) drawRoads(ctx, world);
+    if (show.sites !== false) drawSites(ctx, world);
+    drawLabels(ctx, world); // gated by its own world.showLabels flag
   }
   ctx.restore();
   return canvas;

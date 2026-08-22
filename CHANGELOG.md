@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Every release MUST add an entry here before tagging.
 
+## [0.12.3] - 2026-08-22
+
+### Added
+- **Layer visibility switches**: a new "Layers" group in the scene HUD and the generator toolbar toggles the visibility of labels, realm tint/frontiers, sites & POIs, roads and rivers independently. Purely visual and client-local: hiding a layer never touches the underlying data, and each player can declutter their own view. The political view always draws realms (they are the point of that view), and hidden labels are not draggable.
+
 ## [0.12.2] - 2026-08-22
 
 ### Fixed
