@@ -58,6 +58,14 @@ applyBrush(base, edits2, null, { tool: "mountain", radius: 1, strength: 0.1, ...
 const w2 = deriveWorld(base, edits2);
 assert([14, 15].includes(w2.biome[landCell]), "full-strength mountain converges in one touch");
 
+// --- Sub-cell radius (0.1): paints EXACTLY the hovered cell, full strength,
+// even when the pointer sits away from the cell center.
+const editsTiny = new Float32Array(base.grid.n);
+const off = { x: base.grid.cx[landCell] + base.grid.size * 0.35, y: base.grid.cy[landCell] + base.grid.size * 0.2 };
+const touchedTiny = applyBrush(base, editsTiny, null, { tool: "raise", radius: 0.1, strength: 0.05, ...off });
+assert(touchedTiny === 1, `radius 0.1 touches exactly the hovered cell (got ${touchedTiny})`);
+assert(Math.abs(editsTiny[landCell] - 0.05) < 1e-6, `hovered cell gets full strength (got ${editsTiny[landCell]})`);
+
 // --- Edits stay within the Int8 codec range (author/client desync guard).
 const editsClamp = new Float32Array(base.grid.n);
 for (let k = 0; k < 60; k++) applyBrush(base, editsClamp, null, { tool: "raise", radius: 2, strength: 0.15, ...at(landCell) });

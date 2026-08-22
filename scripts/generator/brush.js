@@ -57,6 +57,8 @@ export function cellAt(grid, x, y) {
  * Cells within radiusPx of a point: a bounded neighbor expansion from the
  * pointer's cell instead of scanning every cell of the map per brush tick.
  * The pointer is clamped into the map so brushing along the border works.
+ * The pointer's own cell is ALWAYS included: sub-cell radii (< the distance
+ * from the pointer to the cell center) must still paint the hovered cell.
  */
 function cellsWithin(grid, x, y, radiusPx) {
   const cx = Math.min(grid.pixelWidth - 1, Math.max(0, x));
@@ -73,7 +75,7 @@ function cellsWithin(grid, x, y, radiusPx) {
     for (const c of frontier) {
       const dx = grid.cx[c] - x;
       const dy = grid.cy[c] - y;
-      if (dx * dx + dy * dy <= r2) out.push(c);
+      if (c === start || dx * dx + dy * dy <= r2) out.push(c);
       for (const nb of grid.neighbors[c]) {
         if (!seen.has(nb)) {
           seen.add(nb);
@@ -90,13 +92,19 @@ export function applyBrush(base, edits, strokeUndo, { tool, radius, strength, x,
   const { grid, elevBase, sea } = base;
   const radiusPx = radius * grid.size;
   const target = toolTarget(tool, sea);
+  // The hovered cell paints at full strength regardless of where inside it
+  // the pointer sits — with sub-cell radii the falloff formula would
+  // otherwise go negative (its center can be farther away than the radius).
+  const start = cellAt(grid,
+    Math.min(grid.pixelWidth - 1, Math.max(0, x)),
+    Math.min(grid.pixelHeight - 1, Math.max(0, y)));
   let touched = 0;
 
   for (const c of cellsWithin(grid, x, y, radiusPx)) {
     const dx = grid.cx[c] - x;
     const dy = grid.cy[c] - y;
     const d2 = dx * dx + dy * dy;
-    const falloff = (1 - Math.sqrt(d2) / radiusPx) ** 2;
+    const falloff = c === start ? 1 : (1 - Math.sqrt(d2) / radiusPx) ** 2;
     if (strokeUndo && !strokeUndo.has(c)) strokeUndo.set(c, edits[c]);
     touched++;
 
